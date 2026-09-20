@@ -1,7 +1,6 @@
 import { AppShell } from "@/components/finance/AppShell";
 import { PageHeader } from "@/components/finance/PageParts";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   ChartContainer,
   ChartTooltip,
