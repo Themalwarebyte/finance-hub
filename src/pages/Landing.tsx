@@ -10,6 +10,7 @@ import {
   Check,
   KeyRound,
   LayoutDashboard,
+  LineChart,
   Shield,
   TrendingUp,
   Users,
@@ -41,6 +42,11 @@ const FEATURES = [
     body: "Rent, paychecks and subscriptions land on the right days, so you can see your projected balance before the month happens.",
   },
   {
+    icon: LineChart,
+    title: "Investments with return estimates",
+    body: "Give an investment account an estimated return — monthly or annual — and that growth compounds daily into the projection.",
+  },
+  {
     icon: Users,
     title: "Built for two",
     body: "One workspace, one invite code. You and your partner see the same balances, the same activity and the same forecast.",
@@ -61,7 +67,7 @@ const STEPS = [
   {
     label: "03",
     title: "Schedule the predictable",
-    body: "Add recurring rent, paychecks and bills. Tally projects your balance day by day for the next month.",
+    body: "Add recurring rent, paychecks and bills, plus investment accounts with estimated returns. Tally projects your balance day by day for the next month.",
   },
 ];
 
@@ -135,7 +141,7 @@ function HeroPreview() {
         <div className="mt-4 flex items-center gap-3 rounded-xl bg-muted/60 px-3.5 py-3">
           <CalendarClock className="text-muted-foreground size-4 shrink-0" />
           <p className="text-muted-foreground truncate text-xs">
-            Rent $1,850 · Paycheck +$2,850 · Groceries $175
+            Rent $1,850 · Paycheck +$2,850 · Est. returns +$138
           </p>
         </div>
       </div>
@@ -217,8 +223,8 @@ export default function Landing() {
             <p className="text-muted-foreground mt-6 max-w-xl text-[17px] leading-8">
               {PRODUCT_NAME} gathers your accounts, money in and money out onto a
               single screen — then draws your balance forward across the next 30
-              days so the month never surprises you. Shared with your partner,
-              down to the last cent.
+              days, investment returns included, so the month never surprises
+              you. Shared with your partner, down to the last cent.
             </p>
 
             <div className="mt-9 flex flex-wrap items-center gap-3">

@@ -34,6 +34,12 @@ export const accountKindValidator = v.union(
 /** Money in vs money out. */
 export const directionValidator = v.union(v.literal("in"), v.literal("out"));
 
+/** Whether an investment return estimate is quoted per year or per month. */
+export const returnBasisValidator = v.union(
+  v.literal("annual"),
+  v.literal("monthly"),
+);
+
 /** How often a scheduled item repeats (used for projections). */
 export const frequencyValidator = v.union(
   v.literal("weekly"),
@@ -90,6 +96,10 @@ const schema = defineSchema(
       openingBalance: v.number(), // cents
       color: v.string(),
       archived: v.boolean(),
+      // Investment return estimate: annual/monthly percentage used to grow the
+      // projected balance of this account over the projection window.
+      estimatedReturnPct: v.optional(v.number()),
+      returnBasis: v.optional(v.union(v.literal("annual"), v.literal("monthly"))),
       createdAt: v.number(),
     }).index("by_household", ["householdId"]),
 

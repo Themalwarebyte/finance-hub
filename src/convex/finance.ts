@@ -4,8 +4,10 @@ import { balancesByAccount } from "./accounts";
 import {
   DAY,
   buildProjection,
+  estimatedReturnTotal,
   expandSchedule,
   getViewer,
+  type GrowthAccount,
   type ProjectionPoint,
   type ScheduledEvent,
 } from "./lib";
@@ -44,6 +46,24 @@ export const overview = query({
 
     const balances = balancesByAccount(accounts, transactions);
 
+    // Investment accounts grow the projection by their estimated return.
+    const growthAccounts: GrowthAccount[] = accounts
+      .filter(
+        (account): account is typeof account & { estimatedReturnPct: number } =>
+          account.kind === "investment" &&
+          !account.archived &&
+          account.estimatedReturnPct !== undefined &&
+          account.estimatedReturnPct !== 0,
+      )
+      .map((account) => ({
+        balance: balances.get(account._id) ?? 0,
+        annualBps: Math.round(
+          account.estimatedReturnPct *
+            100 *
+            (account.returnBasis === "monthly" ? 12 : 1),
+        ),
+      }));
+
     const now = Date.now();
     const since = now - 30 * DAY;
     let moneyIn30 = 0;
@@ -73,6 +93,8 @@ export const overview = query({
           color: account.color,
           setupBalance: account.openingBalance,
           balance,
+          estimatedReturnPct: account.estimatedReturnPct ?? null,
+          returnBasis: account.returnBasis ?? null,
         };
       });
 
@@ -91,7 +113,9 @@ export const overview = query({
       totalBalance,
       now,
       windowDays,
+      growthAccounts,
     );
+    const estimatedReturn = estimatedReturnTotal(growthAccounts, windowDays);
 
     const accountNames = new Map(accounts.map((a) => [a._id, a.name]));
 
@@ -162,6 +186,13 @@ export const overview = query({
       moneyIn30,
       moneyOut30,
       accounts: accountRows,
+      investments: {
+        count: accountRows.filter((account) => account.kind === "investment").length,
+        investedBalance: accountRows
+          .filter((account) => account.kind === "investment")
+          .reduce((sum, account) => sum + account.balance, 0),
+        estimatedReturn,
+      },
       projection: {
         points,
         startBalance: totalBalance,
@@ -170,6 +201,7 @@ export const overview = query({
         scheduledIn,
         scheduledOut,
         scheduledCount: events.length,
+        estimatedReturn,
       },
       upcoming,
       recentTransactions,

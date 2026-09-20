@@ -189,7 +189,11 @@ export function OverviewTab({
         <StatCard
           label={`Projected · ${data.windowDays}d`}
           value={formatMoney(projection.endBalance, { cents: false })}
-          hint={`${changePositive ? "+" : "\u2212"}${formatMoney(Math.abs(projection.change), { cents: false })} from scheduled money`}
+          hint={
+            data.investments.estimatedReturn !== 0
+              ? `${changePositive ? "+" : "\u2212"}${formatMoney(Math.abs(projection.change), { cents: false })} · incl. ${formatMoney(data.investments.estimatedReturn, { cents: false })} est. returns`
+              : `${changePositive ? "+" : "\u2212"}${formatMoney(Math.abs(projection.change), { cents: false })} from scheduled money`
+          }
           icon={
             changePositive ? (
               <TrendingUp className="size-4" />
@@ -292,7 +296,7 @@ export function OverviewTab({
                 Balance projection
               </h2>
               <p className="text-muted-foreground mt-1 text-sm">
-                Where your money lands if every scheduled item lands on time.
+                Scheduled money plus estimated investment returns, day by day.
               </p>
             </div>
             <Select
@@ -405,7 +409,7 @@ export function OverviewTab({
             </AreaChart>
           </ChartContainer>
 
-          <div className="border-border/70 mt-4 grid gap-4 border-t pt-4 sm:grid-cols-3">
+          <div className="border-border/70 mt-4 grid gap-4 border-t pt-4 sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <p className="text-muted-foreground text-xs">Starting balance</p>
               <p className="mt-1 text-sm font-semibold tabular-nums">
@@ -423,6 +427,20 @@ export function OverviewTab({
               <p className="text-negative mt-1 text-sm font-semibold tabular-nums">
                 {"\u2212"}
                 {formatMoney(projection.scheduledOut)}
+              </p>
+            </div>
+            <div>
+              <p className="text-muted-foreground text-xs">Est. investment return</p>
+              <p
+                className={cn(
+                  "mt-1 text-sm font-semibold tabular-nums",
+                  data.investments.estimatedReturn > 0 && "text-positive",
+                  data.investments.estimatedReturn < 0 && "text-negative",
+                )}
+              >
+                {data.investments.count === 0
+                  ? "No investments yet"
+                  : `${data.investments.estimatedReturn >= 0 ? "+" : "\u2212"}${formatMoney(Math.abs(data.investments.estimatedReturn))}`}
               </p>
             </div>
           </div>

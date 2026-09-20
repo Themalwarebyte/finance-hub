@@ -30,6 +30,8 @@ const SAMPLE_ACCOUNTS: {
   institution: string;
   openingBalance: number;
   color: string;
+  estimatedReturnPct?: number;
+  returnBasis?: "annual" | "monthly";
 }[] = [
   {
     key: "everyday",
@@ -71,6 +73,26 @@ const SAMPLE_ACCOUNTS: {
     openingBalance: 21_500,
     color: "slate",
   },
+  {
+    key: "brokerage",
+    name: "Index Fund Brokerage",
+    kind: "investment",
+    institution: "Meridian Invest",
+    openingBalance: 1_240_000,
+    color: "emerald",
+    estimatedReturnPct: 7,
+    returnBasis: "annual",
+  },
+  {
+    key: "robo",
+    name: "Robo Advisor Portfolio",
+    kind: "investment",
+    institution: "Northline Wealth",
+    openingBalance: 2_860_000,
+    color: "indigo",
+    estimatedReturnPct: 0.45,
+    returnBasis: "monthly",
+  },
 ];
 
 const SAMPLE_TRANSACTIONS: SampleTransaction[] = [
@@ -100,6 +122,9 @@ const SAMPLE_TRANSACTIONS: SampleTransaction[] = [
   { account: "everyday", direction: "out", amount: 490, description: "Coffee shop", category: "Dining", daysAgo: 2 },
   { account: "joint", direction: "out", amount: 9_600, description: "Weekly groceries", category: "Groceries", daysAgo: 1 },
   { account: "cash", direction: "out", amount: 2_400, description: "Farmers market", category: "Groceries", daysAgo: 1 },
+  { account: "brokerage", direction: "in", amount: 150_000, description: "Monthly contribution", category: "Savings", daysAgo: 12 },
+  { account: "brokerage", direction: "in", amount: 7_240, description: "Dividend payout", category: "Income", daysAgo: 5 },
+  { account: "robo", direction: "in", amount: 40_000, description: "Monthly contribution", category: "Savings", daysAgo: 19 },
 ];
 
 const SAMPLE_RECURRING: SampleRecurring[] = [
@@ -141,6 +166,8 @@ export const load = mutation({
         openingBalance: account.openingBalance,
         color: account.color,
         archived: false,
+        estimatedReturnPct: account.estimatedReturnPct,
+        returnBasis: account.returnBasis,
         createdAt: now + ids.size,
       });
       ids.set(account.key, id);

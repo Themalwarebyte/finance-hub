@@ -34,6 +34,40 @@ export const COLORS = [
 
 export type AccountColor = (typeof COLORS)[number];
 
+export type ReturnBasis = "annual" | "monthly";
+
+export const RETURN_BASES: { value: ReturnBasis; label: string; short: string }[] = [
+  { value: "annual", label: "Yearly rate", short: "year" },
+  { value: "monthly", label: "Monthly rate", short: "month" },
+];
+
+export function returnBasisLabel(basis: string | null): string {
+  return RETURN_BASES.find((item) => item.value === basis)?.short ?? "year";
+}
+
+/** Normalise a return estimate to a yearly percentage for projections. */
+export function annualReturnPct(
+  pct: number | null | undefined,
+  basis: string | null | undefined,
+): number | null {
+  if (pct === null || pct === undefined) return null;
+  return basis === "monthly" ? pct * 12 : pct;
+}
+
+/** Estimate for the next full year / month, compounded. */
+export function returnEstimate(pct: number, basis: "annual" | "monthly", balance: number) {
+  const dollars = balance / 100;
+  const amount =
+    basis === "annual"
+      ? dollars * (Math.pow(1 + pct / 100, 1) - 1)
+      : dollars * (Math.pow(1 + pct / 100, 12) - 1);
+  const amountCents = Math.round(amount * 100);
+  if (basis === "annual") {
+    return { amount: amountCents, periodLabel: "over the next year", monthly: Math.round(amountCents / 12) };
+  }
+  return { amount: amountCents, periodLabel: "per month", monthly: amountCents };
+}
+
 export const COLOR_META: Record<
   AccountColor,
   { label: string; dot: string; wash: string; text: string }

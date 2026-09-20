@@ -2,6 +2,7 @@ import { Wordmark } from "@/components/BrandMark";
 import { AccountDialog } from "@/components/finance/AccountDialog";
 import { AccountsTab, type AccountRow } from "@/components/finance/AccountsTab";
 import { ActivityTab } from "@/components/finance/ActivityTab";
+import { InvestmentsTab, type InvestmentRow } from "@/components/finance/InvestmentsTab";
 import { OverviewTab } from "@/components/finance/OverviewTab";
 import { RecurringDialog } from "@/components/finance/RecurringDialog";
 import { ScheduledTab } from "@/components/finance/ScheduledTab";
@@ -17,12 +18,12 @@ import type { Direction } from "@/lib/finance";
 import { greeting } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
-import { ArrowRightLeft, CalendarClock, LayoutDashboard, Users, Wallet } from "lucide-react";
+import { ArrowRightLeft, CalendarClock, LayoutDashboard, TrendingUp, Users, Wallet } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 
-type TabValue = "overview" | "accounts" | "activity" | "scheduled";
+type TabValue = "overview" | "accounts" | "investments" | "activity" | "scheduled";
 
 function initialsFor(label: string): string {
   return label.trim().slice(0, 1).toUpperCase() || "?";
@@ -60,7 +61,7 @@ export default function Dashboard() {
   }>({ open: false, direction: "out" });
   const [accountDialog, setAccountDialog] = useState<{
     open: boolean;
-    account: AccountRow | null;
+    account: AccountRow | InvestmentRow | null;
   }>({ open: false, account: null });
   const [recurringOpen, setRecurringOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
@@ -192,6 +193,10 @@ export default function Dashboard() {
               <Wallet className="size-4" />
               Accounts
             </TabsTrigger>
+            <TabsTrigger value="investments" className="shrink-0 gap-2 rounded-full px-3.5">
+              <TrendingUp className="size-4" />
+              Investments
+            </TabsTrigger>
             <TabsTrigger value="activity" className="shrink-0 gap-2 rounded-full px-3.5">
               <ArrowRightLeft className="size-4" />
               Activity
@@ -238,6 +243,15 @@ export default function Dashboard() {
             <AccountsTab
               onAdd={() => setAccountDialog({ open: true, account: null })}
               onEdit={(account) => setAccountDialog({ open: true, account })}
+            />
+          </TabsContent>
+
+          <TabsContent value="investments" className="mt-5">
+            <InvestmentsTab
+              onAdd={() => setAccountDialog({ open: true, account: null })}
+              onEdit={(investment: InvestmentRow) =>
+                setAccountDialog({ open: true, account: investment })
+              }
             />
           </TabsContent>
 

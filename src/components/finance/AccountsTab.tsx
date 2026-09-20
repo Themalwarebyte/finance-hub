@@ -13,8 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { KIND_LABELS, colorMeta, type AccountKind } from "@/lib/finance";
-import { formatMoney } from "@/lib/format";
+import { KIND_LABELS, colorMeta, returnBasisLabel, type AccountKind } from "@/lib/finance";
+import { formatMoney, formatPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { Pencil, Plus, Trash2, Wallet } from "lucide-react";
@@ -30,6 +30,8 @@ export type AccountRow = {
   color: string;
   archived: boolean;
   balance: number;
+  estimatedReturnPct?: number | null;
+  returnBasis?: "annual" | "monthly" | null;
 };
 
 export function AccountsTab({
@@ -191,6 +193,13 @@ export function AccountsTab({
                     Started at {formatMoney(account.openingBalance)}
                   </p>
                 </div>
+
+                {account.kind === "investment" && account.estimatedReturnPct != null && (
+                  <span className="border-border/70 bg-muted/60 text-muted-foreground w-fit rounded-full border px-2.5 py-1 text-xs font-medium tabular-nums">
+                    {formatPct(account.estimatedReturnPct)}/
+                    {returnBasisLabel(account.returnBasis ?? "annual")} est. return
+                  </span>
+                )}
 
                 <Separator className="opacity-60" />
                 <p className="text-muted-foreground text-xs">

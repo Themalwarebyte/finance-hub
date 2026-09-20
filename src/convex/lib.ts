@@ -139,6 +139,21 @@ export type ProjectionPoint = {
   net: number;
 };
 
+/**
+ * One account that earns (or loses) an estimated percentage return inside the
+ * projection window.
+ */
+export type GrowthAccount = {
+  balance: number;
+  /** Basis points per year, e.g. 700 = 7% a year. May be negative. */
+  annualBps: number;
+};
+
+/** Per-day growth factor for an account at a given annual percentage rate. */
+export function dailyReturnRate(annualBps: number): number {
+  return annualBps / 10_000 / 365;
+}
+
 const MONTH_LABELS = [
   "Jan",
   "Feb",
@@ -159,12 +174,17 @@ export function formatDayLabel(ms: number): string {
   return `${MONTH_LABELS[d.getUTCMonth()]} ${d.getUTCDate()}`;
 }
 
-/** Day-by-day running balance across the projection window. */
+/**
+ * Day-by-day running balance across the projection window. Scheduled events
+ * land on their days; investment accounts accrue an estimated return daily,
+ * so the monthly estimate compounding reads as annual-rate/12 per month.
+ */
 export function buildProjection(
   events: ScheduledEvent[],
   startBalance: number,
   startMs: number,
   windowDays: number,
+  growthAccounts: GrowthAccount[] = [],
 ): ProjectionPoint[] {
   const start = startOfUtcDay(startMs);
   const dailyNet = new Map<number, number>();
@@ -175,15 +195,41 @@ export function buildProjection(
     dailyNet.set(index, (dailyNet.get(index) ?? 0) + event.signed);
   }
 
+  const growth = growthAccounts
+    .map((account) => ({
+      balance: account.balance,
+      rate: dailyReturnRate(account.annualBps),
+    }))
+    .filter((entry) => entry.balance !== 0 && entry.rate !== 0);
+
   const points: ProjectionPoint[] = [];
   let balance = startBalance;
   for (let i = 0; i <= windowDays; i += 1) {
+    // Investment growth accrues before today's scheduled money, exactly like
+    // interest would post at day open.
+    let growthToday = 0;
+    for (const entry of growth) {
+      const gain = entry.balance * entry.rate;
+      entry.balance += gain;
+      growthToday += gain;
+    }
+    balance += growthToday;
+
     const net = dailyNet.get(i) ?? 0;
     balance += net;
     const date = start + i * DAY;
     points.push({ date, label: formatDayLabel(date), balance, net });
   }
   return points;
+}
+
+/** Total estimated investment return earned across the window, in cents. */
+export function estimatedReturnTotal(
+  growthAccounts: GrowthAccount[],
+  windowDays: number,
+): number {
+  const simulated = buildProjection([], 0, startOfUtcDay(Date.now()), windowDays, growthAccounts);
+  return Math.round(simulated[simulated.length - 1]?.net ?? 0);
 }
 
 export { DAY };

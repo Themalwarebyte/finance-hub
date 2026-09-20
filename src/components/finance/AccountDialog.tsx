@@ -18,7 +18,14 @@ import {
 } from "@/components/ui/select";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { ACCOUNT_KINDS, COLORS, colorMeta, type AccountKind } from "@/lib/finance";
+import {
+  ACCOUNT_KINDS,
+  COLORS,
+  colorMeta,
+  type AccountKind,
+  type ReturnBasis,
+  RETURN_BASES,
+} from "@/lib/finance";
 import { centsToInput } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useMutation } from "convex/react";
@@ -33,6 +40,8 @@ type EditableAccount = {
   institution?: string | null;
   openingBalance: number;
   color: string;
+  estimatedReturnPct?: number | null;
+  returnBasis?: ReturnBasis | null;
 };
 
 function signedCents(input: string): number {
@@ -61,6 +70,8 @@ export function AccountDialog({
   const [institution, setInstitution] = useState("");
   const [balance, setBalance] = useState("");
   const [color, setColor] = useState<string>("teal");
+  const [returnPct, setReturnPct] = useState("");
+  const [returnBasis, setReturnBasis] = useState<ReturnBasis>("annual");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -70,6 +81,13 @@ export function AccountDialog({
     setInstitution(account?.institution ?? "");
     setBalance(centsToInput(account?.openingBalance ?? 0));
     setColor(account?.color ?? "teal");
+    setReturnPct(
+      account?.estimatedReturnPct !== null &&
+      account?.estimatedReturnPct !== undefined
+        ? String(account.estimatedReturnPct)
+        : "",
+    );
+    setReturnBasis(account?.returnBasis ?? "annual");
     setError(null);
   }, [open, account]);
 
@@ -78,6 +96,16 @@ export function AccountDialog({
     if (name.trim().length === 0) {
       setError("Give this account a name.");
       return;
+    }
+    let estimatedReturnPct: number | undefined;
+    if (returnPct.trim().length > 0) {
+      const cleaned = returnPct.replace(/[^0-9.\-]/g, "");
+      const value = Number.parseFloat(cleaned);
+      if (!Number.isFinite(value) || Math.abs(value) > 100) {
+        setError("Return estimate must be between -100% and 100%.");
+        return;
+      }
+      estimatedReturnPct = value;
     }
     setSaving(true);
     setError(null);
@@ -91,10 +119,20 @@ export function AccountDialog({
           institution,
           openingBalance,
           color,
+          estimatedReturnPct,
+          returnBasis: estimatedReturnPct === undefined ? undefined : returnBasis,
         });
         toast.success("Account updated");
       } else {
-        await createAccount({ name, kind, institution, openingBalance, color });
+        await createAccount({
+          name,
+          kind,
+          institution,
+          openingBalance,
+          color,
+          estimatedReturnPct,
+          returnBasis: estimatedReturnPct === undefined ? undefined : returnBasis,
+        });
         toast.success("Account added");
       }
       onOpenChange(false);
@@ -176,6 +214,51 @@ export function AccountDialog({
               Use a minus sign for money you owe, like a card balance.
             </p>
           </div>
+
+          {kind === "investment" && (
+            <div className="bg-muted/40 border-border/70 rounded-xl border p-3.5">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="account-return">Estimated return %</Label>
+                  <div className="relative">
+                    <Input
+                      id="account-return"
+                      value={returnPct}
+                      onChange={(event) => setReturnPct(event.target.value)}
+                      inputMode="decimal"
+                      className="pr-8 tabular-nums"
+                      placeholder="e.g. 7"
+                    />
+                    <span className="text-muted-foreground pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm">
+                      %
+                    </span>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Rate is</Label>
+                  <Select
+                    value={returnBasis}
+                    onValueChange={(value) => setReturnBasis(value as ReturnBasis)}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {RETURN_BASES.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <p className="text-muted-foreground mt-2.5 text-xs leading-5">
+                Compounds daily into the balance projection for this account.
+                Negative rates are allowed.
+              </p>
+            </div>
+          )}
 
           <div className="flex flex-col gap-2">
             <Label>Colour</Label>

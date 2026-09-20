@@ -40,6 +40,12 @@ export function formatCompactMoney(cents: number): string {
   return `${value < 0 ? MINUS : ""}$${abs.toFixed(0)}`;
 }
 
+/** Format a percentage like 7 -> "7%" or 0.45 -> "0.45%". */
+export function formatPct(pct: number): string {
+  const value = Math.abs(pct) < 0.01 ? pct.toFixed(2) : pct.toFixed(Math.abs(pct % 1) > 0 ? 2 : 0);
+  return `${value.replace(/\.00$/, "")}%`;
+}
+
 /** Parse a user typed dollar amount into positive cents. */
 export function parseAmountToCents(input: string): number | null {
   const cleaned = input.replace(/[^0-9.]/g, "");

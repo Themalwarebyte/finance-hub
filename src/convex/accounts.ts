@@ -2,7 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { getViewer, requireViewer } from "./lib";
-import { accountKindValidator } from "./schema";
+import { accountKindValidator, returnBasisValidator } from "./schema";
 
 const MAX_CENTS = 1_000_000_00_000; // $1B guard against typos
 
@@ -10,6 +10,14 @@ function assertAmount(cents: number, field = "Balance") {
   if (!Number.isFinite(cents)) throw new ConvexError(`${field} is not a number.`);
   if (Math.abs(cents) > MAX_CENTS) throw new ConvexError(`${field} looks too large.`);
   return Math.round(cents);
+}
+
+/** Return estimates live between -100% and +100% per period. */
+function assertReturnPct(pct: number) {
+  if (!Number.isFinite(pct)) throw new ConvexError("Return estimate is not a number.");
+  if (Math.abs(pct) > 100) {
+    throw new ConvexError("Return estimate must be between -100% and 100%.");
+  }
 }
 
 /** Live balance for each account: opening balance plus every transaction. */
@@ -64,11 +72,17 @@ export const create = mutation({
     institution: v.optional(v.string()),
     openingBalance: v.number(),
     color: v.optional(v.string()),
+    estimatedReturnPct: v.optional(v.number()),
+    returnBasis: v.optional(returnBasisValidator),
   },
   handler: async (ctx, args) => {
     const viewer = await requireViewer(ctx);
     const name = args.name.trim();
     if (name.length === 0) throw new ConvexError("Name the account.");
+
+    if (args.estimatedReturnPct !== undefined) {
+      assertReturnPct(args.estimatedReturnPct);
+    }
 
     return await ctx.db.insert("accounts", {
       householdId: viewer.householdId,
@@ -78,6 +92,8 @@ export const create = mutation({
       openingBalance: assertAmount(args.openingBalance),
       color: args.color ?? "teal",
       archived: false,
+      estimatedReturnPct: args.estimatedReturnPct,
+      returnBasis: args.returnBasis,
       createdAt: Date.now(),
     });
   },
@@ -92,6 +108,8 @@ export const update = mutation({
     openingBalance: v.optional(v.number()),
     color: v.optional(v.string()),
     archived: v.optional(v.boolean()),
+    estimatedReturnPct: v.optional(v.number()),
+    returnBasis: v.optional(returnBasisValidator),
   },
   handler: async (ctx, args) => {
     const viewer = await requireViewer(ctx);
@@ -115,6 +133,14 @@ export const update = mutation({
     }
     if (args.color !== undefined) patch.color = args.color;
     if (args.archived !== undefined) patch.archived = args.archived;
+    if (args.estimatedReturnPct !== undefined) {
+      assertReturnPct(args.estimatedReturnPct);
+      patch.estimatedReturnPct = args.estimatedReturnPct;
+      // Keep the two fields consistent: clearing the rate clears the basis.
+      patch.returnBasis = args.returnBasis;
+    } else if (args.returnBasis !== undefined) {
+      patch.returnBasis = args.returnBasis;
+    }
 
     await ctx.db.patch(args.accountId, patch);
   },
