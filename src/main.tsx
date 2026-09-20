@@ -1,6 +1,7 @@
 import '@vly-ai/integrations';
 import { Toaster } from "@/components/ui/sonner";
 import { RequireAuth } from "@/components/RequireAuth";
+import { AppShell } from "@/components/finance/AppShell";
 import { VlyToolbar } from "../vly-toolbar-readonly.tsx";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { ConvexReactClient } from "convex/react";
@@ -133,86 +134,20 @@ createRoot(document.getElementById("root")!).render(
                 path="/auth"
                 element={<AuthPage redirectAfterAuth="/dashboard" />}
               />
-              <Route
-                path="/dashboard"
-                element={
-                  <RequireAuth>
-                    <Dashboard />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/accounts"
-                element={
-                  <RequireAuth>
-                    <AccountsPage />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/transactions"
-                element={
-                  <RequireAuth>
-                    <TransactionsPage />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/bills"
-                element={
-                  <RequireAuth>
-                    <BillsPage />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/budgets"
-                element={
-                  <RequireAuth>
-                    <BudgetsPage />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/goals"
-                element={
-                  <RequireAuth>
-                    <GoalsPage />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/forecast"
-                element={
-                  <RequireAuth>
-                    <ForecastPage />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/net-worth"
-                element={
-                  <RequireAuth>
-                    <NetWorthPage />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/investments"
-                element={
-                  <RequireAuth>
-                    <InvestmentsPage />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/debts"
-                element={
-                  <RequireAuth>
-                    <DebtsPage />
-                  </RequireAuth>
-                }
-              />
+              {/* All authenticated pages share the AppShell layout: the sidebar
+                  lives at the route level, so no page can render without it. */}
+              <Route element={<RequireAuth><AppShell /></RequireAuth>}>
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/accounts" element={<AccountsPage />} />
+                <Route path="/transactions" element={<TransactionsPage />} />
+                <Route path="/bills" element={<BillsPage />} />
+                <Route path="/budgets" element={<BudgetsPage />} />
+                <Route path="/goals" element={<GoalsPage />} />
+                <Route path="/forecast" element={<ForecastPage />} />
+                <Route path="/net-worth" element={<NetWorthPage />} />
+                <Route path="/investments" element={<InvestmentsPage />} />
+                <Route path="/debts" element={<DebtsPage />} />
+              </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>

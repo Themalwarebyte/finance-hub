@@ -10,6 +10,12 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useAuth } from "@/hooks/use-auth";
@@ -24,6 +30,8 @@ import {
   Landmark,
   LineChart,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   PiggyBank,
   Receipt,
   Settings,
@@ -32,8 +40,8 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
-import { useState, type ReactNode } from "react";
-import { NavLink, useLocation, useNavigate } from "react-router";
+import { useEffect, useState } from "react";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 
 type NavItem = {
@@ -87,63 +95,133 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
+const SIDEBAR_KEY = "financeHub.sidebarCollapsed";
+const EXPANDED_W = "280px";
+const COLLAPSED_W = "76px";
+
 function initialsFor(label: string): string {
   return label.trim().slice(0, 1).toUpperCase() || "?";
 }
 
 function NavItems({
-  onNavigate,
   pathname,
+  collapsed,
+  onNavigate,
 }: {
-  onNavigate?: () => void;
   pathname: string;
+  collapsed: boolean;
+  onNavigate?: () => void;
 }) {
   return (
-    <nav className="flex flex-col gap-5">
-      {NAV_GROUPS.map((group, groupIndex) => (
-        <div key={group.label || `group-${groupIndex}`} className="flex flex-col gap-1">
-          {group.label && (
-            <p className="text-muted-foreground/70 px-3 text-[10px] font-semibold tracking-[0.14em] uppercase">
-              {group.label}
-            </p>
-          )}
-          {group.items.map((item) =>
-            item.soon ? (
-              <span
-                key={item.to}
-                aria-disabled
-                className="text-muted-foreground/50 flex cursor-not-allowed items-center gap-2.5 rounded-lg px-3 py-2 text-sm"
-              >
-                <item.icon className="size-4 shrink-0" />
-                <span className="flex-1">{item.label}</span>
-                <span className="bg-muted text-muted-foreground/70 rounded-full px-1.5 py-0.5 text-[10px] font-medium">
-                  soon
-                </span>
-              </span>
+    <TooltipProvider delayDuration={150}>
+      <nav className="flex flex-col gap-5">
+        {NAV_GROUPS.map((group, groupIndex) => (
+          <div key={group.label || `group-${groupIndex}`} className="flex flex-col gap-1">
+            {collapsed ? (
+              groupIndex > 0 && <div className="border-border/60 mx-3 border-t" />
             ) : (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                onClick={onNavigate}
-                className={cn(
-                  "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                  pathname === item.to
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
-                )}
-              >
-                <item.icon className="size-4 shrink-0" />
-                {item.label}
-              </NavLink>
-            ),
-          )}
-        </div>
-      ))}
-    </nav>
+              group.label && (
+                <p className="text-muted-foreground/70 px-3 text-[10px] font-semibold tracking-[0.14em] uppercase">
+                  {group.label}
+                </p>
+              )
+            )}
+            {group.items.map((item) => {
+              const link = (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  onClick={onNavigate}
+                  aria-disabled={item.soon}
+                  aria-label={collapsed ? item.label : undefined}
+                  className={cn(
+                    "flex items-center gap-2.5 rounded-lg text-sm font-medium transition-colors",
+                    collapsed ? "mx-auto w-10 justify-center px-0 py-2" : "px-3 py-2",
+                    pathname === item.to
+                      ? "bg-primary/10 text-primary"
+                      : item.soon
+                        ? "text-muted-foreground/50 cursor-not-allowed"
+                        : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                  )}
+                >
+                  <item.icon className="size-4 shrink-0" />
+                  {!collapsed && (
+                    <>
+                      <span className="flex-1">{item.label}</span>
+                      {item.soon && (
+                        <span className="bg-muted text-muted-foreground/70 rounded-full px-1.5 py-0.5 text-[10px] font-medium">
+                          soon
+                        </span>
+                      )}
+                    </>
+                  )}
+                </NavLink>
+              );
+
+              if (item.soon) {
+                return collapsed ? (
+                  <Tooltip key={item.to}>
+                    <TooltipTrigger asChild>
+                      <span role="presentation">{link}</span>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">{`${item.label} · soon`}</TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <span key={item.to} aria-disabled className="cursor-not-allowed">
+                    {link}
+                  </span>
+                );
+              }
+
+              return collapsed ? (
+                <Tooltip key={item.to}>
+                  <TooltipTrigger asChild>{link}</TooltipTrigger>
+                  <TooltipContent side="right">{item.label}</TooltipContent>
+                </Tooltip>
+              ) : (
+                link
+              );
+            })}
+          </div>
+        ))}
+      </nav>
+    </TooltipProvider>
   );
 }
 
-export function AppShell({ children }: { children: ReactNode }) {
+/** Brand block; collapses to the logo mark alone. */
+function SidebarBrand({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
+  return (
+    <div
+      className={cn(
+        "flex items-center pb-4",
+        collapsed ? "flex-col gap-2 px-0" : "justify-between gap-2 px-2",
+      )}
+    >
+      <NavLink
+        to="/dashboard"
+        className={cn("flex items-center gap-2.5", collapsed && "justify-center")}
+        aria-label={PRODUCT_NAME}
+      >
+        <BrandMark />
+        {!collapsed && (
+          <span className="text-[15px] font-semibold tracking-tight">{PRODUCT_NAME}</span>
+        )}
+      </NavLink>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={onToggle}
+        className="text-muted-foreground hover:text-foreground size-8"
+        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+      >
+        {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+      </Button>
+    </div>
+  );
+}
+
+export function AppShell() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -155,6 +233,25 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [loadingSample, setLoadingSample] = useState(false);
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return window.localStorage.getItem(SIDEBAR_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  // Persist the preference; route changes must never reset it.
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(SIDEBAR_KEY, String(collapsed));
+    } catch {
+      // Storage unavailable (private mode etc.) — collapse state just won't persist.
+    }
+  }, [collapsed]);
+
+  const toggleCollapsed = () => setCollapsed((value) => !value);
 
   if (household === undefined) {
     return (
@@ -216,30 +313,55 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 
   return (
-    <div className="bg-background min-h-screen">
-      {/* Desktop sidebar */}
-      <aside className="border-border/70 bg-background/80 fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r px-4 py-5 backdrop-blur-xl lg:flex">
-        <NavLink to="/dashboard" className="flex items-center gap-2.5 px-2 pb-5">
-          <BrandMark />
-          <span className="text-[15px] font-semibold tracking-tight">{PRODUCT_NAME}</span>
-        </NavLink>
+    <div
+      className="bg-background min-h-screen"
+      style={{ "--sidebar-w": collapsed ? COLLAPSED_W : EXPANDED_W } as React.CSSProperties}
+    >
+      {/* Desktop sidebar — persistent, fixed, collapsible */}
+      <aside
+        className="border-border/70 bg-background/80 fixed inset-y-0 left-0 z-30 hidden flex-col overflow-hidden border-r px-3 py-5 backdrop-blur-xl transition-[width] duration-200 ease-in-out lg:flex"
+        style={{ width: "var(--sidebar-w)" }}
+      >
+        <SidebarBrand collapsed={collapsed} onToggle={toggleCollapsed} />
         <div className="flex-1 overflow-y-auto">
-          <NavItems pathname={location.pathname} />
+          <NavItems pathname={location.pathname} collapsed={collapsed} />
         </div>
         <div className="border-border/70 mt-4 border-t pt-4">
-          <button
-            type="button"
-            onClick={() => void handleSignOut()}
-            className="text-muted-foreground hover:text-foreground flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors"
-          >
-            <Settings className="size-4" />
-            Sign out
-          </button>
+          {collapsed ? (
+            <TooltipProvider delayDuration={150}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => void handleSignOut()}
+                    className="text-muted-foreground hover:text-foreground mx-auto flex size-9"
+                    aria-label="Sign out"
+                  >
+                    <Settings className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">Sign out</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void handleSignOut()}
+              className="text-muted-foreground hover:text-foreground flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors"
+            >
+              <Settings className="size-4" />
+              Sign out
+            </button>
+          )}
         </div>
       </aside>
 
-      {/* Main column */}
-      <div className="lg:pl-60">
+      {/* Main column — offset by the sidebar width so it resizes on collapse */}
+      <div
+        className="transition-[padding] duration-200 ease-in-out lg:pl-[var(--sidebar-w)]"
+        style={{ "--sidebar-w": collapsed ? COLLAPSED_W : EXPANDED_W } as React.CSSProperties}
+      >
         <header className="border-border/70 bg-background/85 sticky top-0 z-20 border-b backdrop-blur-xl">
           <div className="flex h-14 w-full items-center justify-between gap-3 px-4 sm:px-6">
             <div className="flex items-center gap-2">
@@ -259,6 +381,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   <div className="px-4 py-5">
                     <NavItems
                       pathname={location.pathname}
+                      collapsed={false}
                       onNavigate={() => setMobileNavOpen(false)}
                     />
                   </div>
@@ -280,7 +403,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-7xl px-4 pt-6 pb-20 sm:px-6">{children}</main>
+        <main className="mx-auto w-full max-w-7xl px-4 pt-6 pb-20 sm:px-6">
+          <Outlet />
+        </main>
       </div>
 
       <TransactionDialog
@@ -303,3 +428,4 @@ export function AppShell({ children }: { children: ReactNode }) {
     </div>
   );
 }
+

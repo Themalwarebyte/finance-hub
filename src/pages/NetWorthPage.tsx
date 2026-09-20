@@ -1,4 +1,3 @@
-import { AppShell } from "@/components/finance/AppShell";
 import { PageHeader } from "@/components/finance/PageParts";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,23 +35,21 @@ export default function NetWorthPage() {
 
   if (summary === undefined) {
     return (
-      <AppShell>
-        <div className="flex flex-col gap-6">
-          <div className="bg-muted h-9 w-56 animate-pulse rounded-lg" />
-          <div className="bg-muted h-64 animate-pulse rounded-xl" />
-        </div>
-      </AppShell>
+      <div className="flex flex-col gap-6">
+        <div className="bg-muted h-9 w-56 animate-pulse rounded-lg" />
+        <div className="bg-muted h-64 animate-pulse rounded-xl" />
+      </div>
     );
   }
 
   if (summary === null || summary.rows.length === 0) {
     return (
-      <AppShell>
+      <>
         <PageHeader title="Net worth" subtitle="Assets minus liabilities, from your accounts." />
         <div className="surface-card text-muted-foreground p-10 text-center text-sm">
           Add accounts to see your net worth — every balance contributes automatically.
         </div>
-      </AppShell>
+      </>
     );
   }
 
@@ -61,15 +58,12 @@ export default function NetWorthPage() {
   const historyPoints = (history ?? []).map((row) => ({
     label: new Date(row.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
     netWorth: row.netWorth,
-  }));
-
-  return (
-    <AppShell>
-      <div className="flex flex-col gap-6">
-        <PageHeader
-          title="Net worth"
-          subtitle="Everything you hold, minus everything you owe."
-        />
+  }));  return (
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Net worth"
+        subtitle="Everything you hold, minus everything you owe."
+      />
 
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="border-transparent bg-primary text-primary-foreground surface-card p-5">
@@ -195,7 +189,6 @@ export default function NetWorthPage() {
             )}
           </section>
         </div>
-      </div>
-    </AppShell>
+    </div>
   );
 }

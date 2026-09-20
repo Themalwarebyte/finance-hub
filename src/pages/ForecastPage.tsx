@@ -1,4 +1,3 @@
-import { AppShell } from "@/components/finance/AppShell";
 import { PageHeader } from "@/components/finance/PageParts";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -39,23 +38,21 @@ export default function ForecastPage() {
 
   if (data === undefined) {
     return (
-      <AppShell>
-        <div className="flex flex-col gap-6">
-          <div className="bg-muted h-9 w-56 animate-pulse rounded-lg" />
-          <div className="bg-muted h-80 animate-pulse rounded-xl" />
-        </div>
-      </AppShell>
+      <div className="flex flex-col gap-6">
+        <div className="bg-muted h-9 w-56 animate-pulse rounded-lg" />
+        <div className="bg-muted h-80 animate-pulse rounded-xl" /> 
+      </div>
     );
   }
 
   if (data === null || !data.hasData) {
     return (
-      <AppShell>
+      <>
         <PageHeader title="Forecast" subtitle="Add accounts to project your balance forward." />
         <div className="surface-card text-muted-foreground p-10 text-center text-sm">
           Add an account first — the forecast needs a starting balance.
         </div>
-      </AppShell>
+      </>
     );
   }
 
@@ -75,8 +72,7 @@ export default function ForecastPage() {
   });
 
   return (
-    <AppShell>
-      <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6">
         <PageHeader
           title="Forecast"
           subtitle="Projected balances from recurring money and investment returns."
@@ -240,7 +236,6 @@ export default function ForecastPage() {
             </ul>
           )}
         </section>
-      </div>
-    </AppShell>
+    </div>
   );
 }

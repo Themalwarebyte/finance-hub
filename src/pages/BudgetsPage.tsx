@@ -1,5 +1,4 @@
 import { BudgetDialog } from "@/components/finance/BudgetDialog";
-import { AppShell } from "@/components/finance/AppShell";
 import { EmptyCard, LoadingCard, PageHeader } from "@/components/finance/PageParts";
 import { Button } from "@/components/ui/button";
 import {
@@ -66,7 +65,7 @@ export default function BudgetsPage() {
   };
 
   return (
-    <AppShell>
+    <>
       <div className="flex flex-col gap-6">
         <PageHeader
           title="Budgets"
@@ -216,8 +215,7 @@ export default function BudgetsPage() {
               Delete budget
             </AlertDialogAction>
           </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </AppShell>
+        </AlertDialogContent>          </AlertDialog>
+    </>
   );
 }

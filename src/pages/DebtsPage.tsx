@@ -1,4 +1,3 @@
-import { AppShell } from "@/components/finance/AppShell";
 import { DebtDialog } from "@/components/finance/DebtDialog";
 import { DebtPayDialog } from "@/components/finance/DebtPayDialog";
 import { EmptyCard, LoadingCard, PageHeader, MiniStat } from "@/components/finance/PageParts";
@@ -90,7 +89,7 @@ export default function DebtsPage() {
   };
 
   return (
-    <AppShell>
+    <>
       <div className="flex flex-col gap-6">
         <PageHeader
           title="Debt manager"
@@ -296,6 +295,6 @@ export default function DebtsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </AppShell>
+    </>
   );
 }

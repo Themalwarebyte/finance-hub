@@ -1,4 +1,3 @@
-import { AppShell } from "@/components/finance/AppShell";
 import { GoalDialog } from "@/components/finance/GoalDialog";
 import { GoalContributeDialog } from "@/components/finance/GoalContributeDialog";
 import { EmptyCard, LoadingCard, PageHeader } from "@/components/finance/PageParts";
@@ -55,7 +54,7 @@ export default function GoalsPage() {
   };
 
   return (
-    <AppShell>
+    <>
       <div className="flex flex-col gap-6">
         <PageHeader
           title="Savings goals"
@@ -231,6 +230,6 @@ export default function GoalsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </AppShell>
+    </>
   );
 }

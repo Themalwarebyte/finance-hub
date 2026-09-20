@@ -183,7 +183,7 @@ export default function Dashboard() {
 
   if (data === null || !data.hasData) {
     return (
-      <div className="flex flex-col gap-6">
+      <>
         <PageHeader
           title="Your money, one view"
           subtitle="Add an account to start tracking balances, spending and goals."
@@ -197,7 +197,7 @@ export default function Dashboard() {
           </h2>
           <p className="text-muted-foreground mt-2 max-w-md text-sm leading-6">
             Add your first account from the Accounts page — checking, savings, M-PESA,
-            investments — and the dashboard fills in from real records.
+            investments — and the dashboard fills in from the real records.
           </p>
           <Button asChild className="mt-7 gap-2">
             <a href="/accounts">
@@ -206,7 +206,7 @@ export default function Dashboard() {
             </a>
           </Button>
         </section>
-      </div>
+      </>
     );
   }
 
