@@ -13,6 +13,15 @@ import "./index.css";
 const Landing = lazy(() => import("./pages/Landing.tsx"));
 const AuthPage = lazy(() => import("./pages/Auth.tsx"));
 const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
+const AccountsPage = lazy(() => import("./pages/AccountsPage.tsx"));
+const TransactionsPage = lazy(() => import("./pages/TransactionsPage.tsx"));
+const BillsPage = lazy(() => import("./pages/BillsPage.tsx"));
+const BudgetsPage = lazy(() => import("./pages/BudgetsPage.tsx"));
+const GoalsPage = lazy(() => import("./pages/GoalsPage.tsx"));
+const ForecastPage = lazy(() => import("./pages/ForecastPage.tsx"));
+const NetWorthPage = lazy(() => import("./pages/NetWorthPage.tsx"));
+const InvestmentsPage = lazy(() => import("./pages/InvestmentsPage.tsx"));
+const DebtsPage = lazy(() => import("./pages/DebtsPage.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
 // Simple loading fallback for route transitions
@@ -129,6 +138,78 @@ createRoot(document.getElementById("root")!).render(
                 element={
                   <RequireAuth>
                     <Dashboard />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/accounts"
+                element={
+                  <RequireAuth>
+                    <AccountsPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/transactions"
+                element={
+                  <RequireAuth>
+                    <TransactionsPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/bills"
+                element={
+                  <RequireAuth>
+                    <BillsPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/budgets"
+                element={
+                  <RequireAuth>
+                    <BudgetsPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/goals"
+                element={
+                  <RequireAuth>
+                    <GoalsPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/forecast"
+                element={
+                  <RequireAuth>
+                    <ForecastPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/net-worth"
+                element={
+                  <RequireAuth>
+                    <NetWorthPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/investments"
+                element={
+                  <RequireAuth>
+                    <InvestmentsPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/debts"
+                element={
+                  <RequireAuth>
+                    <DebtsPage />
                   </RequireAuth>
                 }
               />

@@ -20,7 +20,15 @@ function assertReturnPct(pct: number) {
   }
 }
 
-/** Live balance for each account: opening balance plus every transaction. */
+/** Account kinds that represent money you owe rather than money you hold. */
+export function isLiabilityKind(kind: Doc<"accounts">["kind"]): boolean {
+  return kind === "credit" || kind === "loan" || kind === "mortgage";
+}
+
+/**
+ * Live balance for each account: opening balance plus every transaction.
+ * Transfers move money between two accounts without touching income/expense.
+ */
 export function balancesByAccount(
   accounts: Doc<"accounts">[],
   transactions: Doc<"transactions">[],
@@ -29,13 +37,21 @@ export function balancesByAccount(
   for (const account of accounts) {
     balances.set(account._id, account.openingBalance);
   }
+  const apply = (accountId: Id<"accounts"> | undefined, delta: number) => {
+    if (!accountId) return;
+    if (!balances.has(accountId)) return;
+    balances.set(accountId, (balances.get(accountId) ?? 0) + delta);
+  };
   for (const transaction of transactions) {
-    if (!balances.has(transaction.accountId)) continue;
-    const current = balances.get(transaction.accountId) ?? 0;
-    balances.set(
-      transaction.accountId,
-      current + (transaction.direction === "in" ? transaction.amount : -transaction.amount),
-    );
+    if (transaction.direction === "transfer") {
+      apply(transaction.accountId, -transaction.amount);
+      apply(transaction.transferAccountId, transaction.amount);
+    } else {
+      apply(
+        transaction.accountId,
+        transaction.direction === "in" ? transaction.amount : -transaction.amount,
+      );
+    }
   }
   return balances;
 }
@@ -74,6 +90,10 @@ export const create = mutation({
     color: v.optional(v.string()),
     estimatedReturnPct: v.optional(v.number()),
     returnBasis: v.optional(returnBasisValidator),
+    reference: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    currency: v.optional(v.string()),
+    includeInNetWorth: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const viewer = await requireViewer(ctx);
@@ -94,6 +114,10 @@ export const create = mutation({
       archived: false,
       estimatedReturnPct: args.estimatedReturnPct,
       returnBasis: args.returnBasis,
+      reference: args.reference?.trim().slice(0, 60) || undefined,
+      notes: args.notes?.trim().slice(0, 500) || undefined,
+      currency: args.currency?.trim().toUpperCase().slice(0, 3) || undefined,
+      includeInNetWorth: args.includeInNetWorth ?? true,
       createdAt: Date.now(),
     });
   },
@@ -110,6 +134,10 @@ export const update = mutation({
     archived: v.optional(v.boolean()),
     estimatedReturnPct: v.optional(v.number()),
     returnBasis: v.optional(returnBasisValidator),
+    reference: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    currency: v.optional(v.string()),
+    includeInNetWorth: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const viewer = await requireViewer(ctx);
@@ -136,10 +164,21 @@ export const update = mutation({
     if (args.estimatedReturnPct !== undefined) {
       assertReturnPct(args.estimatedReturnPct);
       patch.estimatedReturnPct = args.estimatedReturnPct;
-      // Keep the two fields consistent: clearing the rate clears the basis.
       patch.returnBasis = args.returnBasis;
     } else if (args.returnBasis !== undefined) {
       patch.returnBasis = args.returnBasis;
+    }
+    if (args.reference !== undefined) {
+      patch.reference = args.reference.trim().slice(0, 60) || undefined;
+    }
+    if (args.notes !== undefined) {
+      patch.notes = args.notes.trim().slice(0, 500) || undefined;
+    }
+    if (args.currency !== undefined) {
+      patch.currency = args.currency.trim().toUpperCase().slice(0, 3) || undefined;
+    }
+    if (args.includeInNetWorth !== undefined) {
+      patch.includeInNetWorth = args.includeInNetWorth;
     }
 
     await ctx.db.patch(args.accountId, patch);
@@ -169,6 +208,26 @@ export const remove = mutation({
       .collect();
     for (const item of recurring) {
       if (item.accountId === args.accountId) await ctx.db.delete(item._id);
+    }
+
+    // Detach goals and debts pointing at this account instead of deleting them.
+    const goals = await ctx.db
+      .query("goals")
+      .withIndex("by_household", (q) => q.eq("householdId", viewer.householdId))
+      .collect();
+    for (const goal of goals) {
+      if (goal.linkedAccountId === args.accountId) {
+        await ctx.db.patch(goal._id, { linkedAccountId: undefined });
+      }
+    }
+    const debts = await ctx.db
+      .query("debts")
+      .withIndex("by_household", (q) => q.eq("householdId", viewer.householdId))
+      .collect();
+    for (const debt of debts) {
+      if (debt.linkedAccountId === args.accountId) {
+        await ctx.db.patch(debt._id, { linkedAccountId: undefined });
+      }
     }
 
     await ctx.db.delete(args.accountId);

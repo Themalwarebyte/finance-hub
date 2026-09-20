@@ -25,8 +25,12 @@ export function formatMoney(
   return formatted.replace("-", MINUS);
 }
 
-/** 1234567 -> "+$12,345.67" / "\u2212$12,345.67" */
-export function formatSignedMoney(cents: number, direction: "in" | "out"): string {
+/** 1234567 -> "+$12,345.67" / "\u2212$12,345.67"; transfers show plain. */
+export function formatSignedMoney(
+  cents: number,
+  direction: "in" | "out" | "transfer",
+): string {
+  if (direction === "transfer") return formatMoney(cents);
   const sign = direction === "in" ? "+" : MINUS;
   return `${sign}${formatMoney(Math.abs(cents))}`;
 }

@@ -22,9 +22,17 @@ import { categoriesFor, type Direction } from "@/lib/finance";
 import { dateInputToMs, msToDateInput, parseAmountToCents } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
-import { ArrowDownLeft, ArrowUpRight, Loader2 } from "lucide-react";
+import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+
+type EntryMode = "in" | "out" | "transfer";
+
+const MODES: { value: EntryMode; label: string; icon: typeof ArrowDownLeft }[] = [
+  { value: "in", label: "Money in", icon: ArrowDownLeft },
+  { value: "out", label: "Money out", icon: ArrowUpRight },
+  { value: "transfer", label: "Transfer", icon: ArrowRightLeft },
+];
 
 export function TransactionDialog({
   open,
@@ -38,34 +46,47 @@ export function TransactionDialog({
   const accounts = useQuery(api.accounts.list, {});
   const createTransaction = useMutation(api.transactions.create);
 
-  const [direction, setDirection] = useState<Direction>(defaultDirection);
+  const [mode, setMode] = useState<EntryMode>(
+    defaultDirection === "in" ? "in" : defaultDirection === "transfer" ? "transfer" : "out",
+  );
   const [amount, setAmount] = useState("");
   const [accountId, setAccountId] = useState<string>("");
+  const [transferAccountId, setTransferAccountId] = useState<string>("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("Groceries");
+  const [merchant, setMerchant] = useState("");
   const [date, setDate] = useState(msToDateInput(Date.now()));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const activeAccounts = accounts ?? [];
+
   useEffect(() => {
     if (!open) return;
-    setDirection(defaultDirection);
+    setMode(
+      defaultDirection === "in" ? "in" : defaultDirection === "transfer" ? "transfer" : "out",
+    );
     setAmount("");
     setDescription("");
-    setCategory(defaultDirection === "in" ? "Income" : "Groceries");
+    setMerchant("");
+    setCategory(defaultDirection === "in" ? "Salary" : "Groceries");
     setDate(msToDateInput(Date.now()));
     setError(null);
   }, [open, defaultDirection]);
 
   useEffect(() => {
-    if (!open) return;
-    if (accounts && accounts.length > 0 && !accounts.some((a) => a._id === accountId)) {
-      setAccountId(accounts[0]._id);
+    if (!open || activeAccounts.length === 0) return;
+    if (!activeAccounts.some((a) => a._id === accountId)) {
+      setAccountId(activeAccounts[0]._id);
     }
-  }, [accounts, accountId, open]);
+    if (!activeAccounts.some((a) => a._id === transferAccountId)) {
+      const second = activeAccounts.find((a) => a._id !== accountId) ?? activeAccounts[0];
+      setTransferAccountId(second._id);
+    }
+  }, [accounts, accountId, transferAccountId, open]);
 
-  const switchDirection = (next: Direction) => {
-    setDirection(next);
+  const switchMode = (next: EntryMode) => {
+    setMode(next);
     const options = categoriesFor(next);
     if (!options.includes(category)) setCategory(options[0]);
   };
@@ -81,6 +102,10 @@ export function TransactionDialog({
       setError("Add an account first.");
       return;
     }
+    if (mode === "transfer" && transferAccountId === accountId) {
+      setError("Pick two different accounts for a transfer.");
+      return;
+    }
     if (description.trim().length === 0) {
       setError("Add a short description.");
       return;
@@ -91,13 +116,18 @@ export function TransactionDialog({
     try {
       await createTransaction({
         accountId: accountId as Id<"accounts">,
-        direction,
+        direction: mode,
         amount: cents,
         description,
         category,
         date: dateInputToMs(date),
+        transferAccountId:
+          mode === "transfer" ? (transferAccountId as Id<"accounts">) : undefined,
+        merchant: merchant.trim() || undefined,
       });
-      toast.success(direction === "in" ? "Money in recorded" : "Money out recorded");
+      toast.success(
+        mode === "in" ? "Money in recorded" : mode === "out" ? "Money out recorded" : "Transfer recorded",
+      );
       onOpenChange(false);
     } catch (submitError) {
       setError(
@@ -108,47 +138,44 @@ export function TransactionDialog({
     }
   };
 
-  const noAccounts = accounts !== undefined && accounts.length === 0;
+  const noAccounts = accounts !== undefined && activeAccounts.length < (mode === "transfer" ? 2 : 1);
+  const categoryOptions = categoriesFor(mode);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Record money</DialogTitle>
           <DialogDescription>
-            Log money coming in or going out — it updates your balances straight
-            away.
+            Income, expenses and transfers all land in the same ledger — balances
+            update instantly.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div className="bg-muted grid grid-cols-2 gap-1 rounded-lg p-1">
-            <button
-              type="button"
-              onClick={() => switchDirection("in")}
-              className={cn(
-                "flex items-center justify-center gap-2 rounded-md py-2 text-sm font-medium transition-all",
-                direction === "in"
-                  ? "bg-card text-positive shadow-[var(--shadow-soft)]"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <ArrowDownLeft className="size-4" />
-              Money in
-            </button>
-            <button
-              type="button"
-              onClick={() => switchDirection("out")}
-              className={cn(
-                "flex items-center justify-center gap-2 rounded-md py-2 text-sm font-medium transition-all",
-                direction === "out"
-                  ? "bg-card text-negative shadow-[var(--shadow-soft)]"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <ArrowUpRight className="size-4" />
-              Money out
-            </button>
+          <div className="bg-muted grid grid-cols-3 gap-1 rounded-lg p-1">
+            {MODES.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => switchMode(option.value)}
+                className={cn(
+                  "flex items-center justify-center gap-1.5 rounded-md py-2 text-xs font-medium transition-all sm:text-sm",
+                  mode === option.value
+                    ? "bg-card shadow-[var(--shadow-soft)]"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <option.icon
+                  className={cn(
+                    "size-4",
+                    mode === option.value && option.value === "in" && "text-positive",
+                    mode === option.value && option.value === "out" && "text-negative",
+                  )}
+                />
+                {option.label}
+              </button>
+            ))}
           </div>
 
           <div className="flex flex-col gap-2">
@@ -169,66 +196,118 @@ export function TransactionDialog({
             </div>
           </div>
 
+          {mode === "transfer" ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-2">
+                <Label>From</Label>
+                <Select value={accountId} onValueChange={setAccountId} disabled={noAccounts}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="From account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {activeAccounts.map((account) => (
+                      <SelectItem key={account._id} value={account._id}>
+                        {account.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label>To</Label>
+                <Select
+                  value={transferAccountId}
+                  onValueChange={setTransferAccountId}
+                  disabled={noAccounts}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="To account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {activeAccounts
+                      .filter((account) => account._id !== accountId)
+                      .map((account) => (
+                        <SelectItem key={account._id} value={account._id}>
+                          {account.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-2">
+                <Label>Account</Label>
+                <Select value={accountId} onValueChange={setAccountId} disabled={noAccounts}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Choose account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {activeAccounts.map((account) => (
+                      <SelectItem key={account._id} value={account._id}>
+                        {account.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label>{mode === "in" ? "Income source" : "Category"}</Label>
+                <Select value={category} onValueChange={setCategory}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categoryOptions.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-col gap-2">
             <Label htmlFor="transaction-description">Description</Label>
             <Input
               id="transaction-description"
               value={description}
               onChange={(event) => setDescription(event.target.value)}
-              placeholder={direction === "in" ? "Paycheck" : "Weekly groceries"}
+              placeholder={
+                mode === "in" ? "Salary" : mode === "transfer" ? "Move to savings" : "Weekly groceries"
+              }
             />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
-              <Label>Account</Label>
-              <Select
-                value={accountId}
-                onValueChange={setAccountId}
-                disabled={noAccounts}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Choose account" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(accounts ?? []).map((account) => (
-                    <SelectItem key={account._id} value={account._id}>
-                      {account.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label htmlFor="transaction-merchant">Merchant / payee</Label>
+              <Input
+                id="transaction-merchant"
+                value={merchant}
+                onChange={(event) => setMerchant(event.target.value)}
+                placeholder="Optional"
+              />
             </div>
             <div className="flex flex-col gap-2">
-              <Label>Category</Label>
-              <Select value={category} onValueChange={setCategory}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {categoriesFor(direction).map((option) => (
-                    <SelectItem key={option} value={option}>
-                      {option}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label htmlFor="transaction-date">Date</Label>
+              <Input
+                id="transaction-date"
+                type="date"
+                value={date}
+                onChange={(event) => setDate(event.target.value)}
+              />
             </div>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="transaction-date">Date</Label>
-            <Input
-              id="transaction-date"
-              type="date"
-              value={date}
-              onChange={(event) => setDate(event.target.value)}
-            />
           </div>
 
           {noAccounts && (
             <p className="text-muted-foreground text-sm">
-              You need at least one account before recording money.
+              {mode === "transfer"
+                ? "You need at least two accounts before transferring money."
+                : "You need at least one account before recording money."}
             </p>
           )}
           {error && <p className="text-destructive text-sm">{error}</p>}
@@ -244,7 +323,7 @@ export function TransactionDialog({
             </Button>
             <Button type="submit" disabled={saving || noAccounts}>
               {saving && <Loader2 className="animate-spin" />}
-              Record
+              {mode === "transfer" ? "Transfer" : "Record"}
             </Button>
           </DialogFooter>
         </form>

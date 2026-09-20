@@ -1,26 +1,51 @@
-export type AccountKind = "checking" | "savings" | "credit" | "cash" | "investment";
-export type Direction = "in" | "out";
+export type AccountKind =
+  | "checking"
+  | "savings"
+  | "current"
+  | "credit"
+  | "cash"
+  | "mpesa"
+  | "mobile_money"
+  | "sacco"
+  | "money_market"
+  | "loan"
+  | "mortgage"
+  | "investment"
+  | "brokerage"
+  | "pension"
+  | "crypto"
+  | "property"
+  | "other";
+export type Direction = "in" | "out" | "transfer";
 export type Frequency = "weekly" | "biweekly" | "semimonthly" | "monthly";
 
-export const ACCOUNT_KINDS: { value: AccountKind; label: string }[] = [
-  { value: "checking", label: "Checking" },
-  { value: "savings", label: "Savings" },
-  { value: "credit", label: "Credit card" },
-  { value: "cash", label: "Cash" },
-  { value: "investment", label: "Investment" },
+export const ACCOUNT_KINDS: { value: AccountKind; label: string; group: string }[] = [
+  { value: "checking", label: "Bank account", group: "Everyday" },
+  { value: "current", label: "Current account", group: "Everyday" },
+  { value: "savings", label: "Savings account", group: "Everyday" },
+  { value: "cash", label: "Cash", group: "Everyday" },
+  { value: "mpesa", label: "M-PESA", group: "Everyday" },
+  { value: "mobile_money", label: "Airtel Money", group: "Everyday" },
+  { value: "sacco", label: "SACCO", group: "Everyday" },
+  { value: "money_market", label: "Money market fund", group: "Savings & investing" },
+  { value: "investment", label: "Investment account", group: "Savings & investing" },
+  { value: "brokerage", label: "Brokerage account", group: "Savings & investing" },
+  { value: "pension", label: "Pension", group: "Savings & investing" },
+  { value: "crypto", label: "Cryptocurrency wallet", group: "Savings & investing" },
+  { value: "property", label: "Property account", group: "Savings & investing" },
+  { value: "credit", label: "Credit card", group: "Debt" },
+  { value: "loan", label: "Loan account", group: "Debt" },
+  { value: "mortgage", label: "Mortgage", group: "Debt" },
+  { value: "other", label: "Other account", group: "Other" },
 ];
 
-export const KIND_LABELS: Record<AccountKind, string> = {
-  checking: "Checking",
-  savings: "Savings",
-  credit: "Credit card",
-  cash: "Cash",
-  investment: "Investment",
-};
+export const KIND_LABELS: Record<AccountKind, string> = Object.fromEntries(
+  ACCOUNT_KINDS.map((option) => [option.value, option.label]),
+) as Record<AccountKind, string>;
 
 /** Accounts whose balance counts as money you owe rather than money you hold. */
 export function isLiability(kind: AccountKind): boolean {
-  return kind === "credit";
+  return kind === "credit" || kind === "loan" || kind === "mortgage";
 }
 
 export const COLORS = [
@@ -126,27 +151,62 @@ export function frequencyLabel(frequency: string): string {
 }
 
 export const CATEGORIES = [
-  "Income",
   "Housing",
+  "Food",
   "Groceries",
-  "Utilities",
-  "Transport",
   "Dining",
+  "Transport",
+  "Fuel",
   "Health",
-  "Subscriptions",
+  "Insurance",
+  "Education",
+  "Family",
+  "Children",
+  "Utilities",
+  "Internet",
+  "Airtime",
   "Entertainment",
-  "Travel",
-  "Savings",
   "Shopping",
+  "Travel",
+  "Giving",
+  "Charity",
+  "Personal Care",
+  "Debt Payments",
+  "Investments",
+  "Savings",
+  "Taxes",
+  "Business",
+  "Subscriptions",
+  "Transfer",
+  "Other",
+];
+
+export const INCOME_SOURCES = [
+  "Salary",
+  "Consulting",
+  "Freelance",
+  "Business",
+  "Rental Income",
+  "Dividends",
+  "Interest",
+  "Pension",
+  "Bonus",
+  "Commission",
+  "Allowance",
+  "Gifts",
+  "Refunds",
   "Other",
 ];
 
 /** Suggested categories per direction keeps data-entry fast. */
 export function categoriesFor(direction: Direction): string[] {
   if (direction === "in") {
-    return ["Income", "Refund", "Interest", "Gift", "Transfer", "Other"];
+    return [...INCOME_SOURCES];
   }
-  return CATEGORIES.filter((category) => category !== "Income");
+  if (direction === "transfer") {
+    return ["Transfer"];
+  }
+  return CATEGORIES.filter((category) => category !== "Transfer");
 }
 
 export const WINDOW_OPTIONS: { value: number; label: string }[] = [

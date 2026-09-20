@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 
-export const PRODUCT_NAME = "Tally";
+export const PRODUCT_NAME = "Finance Hub";
 
 export function BrandMark({ className }: { className?: string }) {
   return (

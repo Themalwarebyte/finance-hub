@@ -67,7 +67,7 @@ const STEPS = [
   {
     label: "03",
     title: "Schedule the predictable",
-    body: "Add recurring rent, paychecks and bills, plus investment accounts with estimated returns. Tally projects your balance day by day for the next month.",
+    body: "Add recurring rent, paychecks and bills, plus investment accounts with estimated returns. Finance Hub projects your balance day by day for the coming months.",
   },
 ];
 
