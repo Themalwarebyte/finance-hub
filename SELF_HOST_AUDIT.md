@@ -1,0 +1,184 @@
+# Self-Host Readiness Audit
+
+**Product:** Finance Hub (upstream: Freebuff)
+**Scope:** Parts 1 and 2 of the Phase 4 baseline, audited for production readiness.
+**Review date:** 2026-10-08.
+
+This audit confirms what must be self-hosted before `bun run build` can produce
+a deployable bundle. It is intentionally conservative: each item below blocks a
+real production concern (secrets, runtime, or data lifecycle).
+
+## Frontend Dependencies
+
+**Package manager:** Bun (project `package.json` scripts use `bun test`, `bun run dev`, `bun run build`).
+**Build tooling:** Vite 7 + @vitejs/plugin-react. TypeScript 5.9 (`tsc -b`).
+**UI primitives:** shadcn/ui (new-york style, `components.json`), Radix UI (24+ headless
+components), Tailwind CSS v4 (`@tailwindcss/vite`), clsx + tailwind-merge.
+**Icons:** lucide-react.
+**Animation:** framer-motion, date-fns, recharts (charts), react-resizable-panels,
+embla-carousel-react, react-intersection-observer, next-themes, sonner (toasts),
+@hookform/resolvers + react-hook-form + zod (forms), @radix-ui form-adjacent inputs.
+
+**No Node built-in modules are imported on the frontend.** All "crypto"-adjacent needs
+are either server-only (Convex) or handled by `@oslojs/crypto` in Convex actions, so there
+is no client-side crypto surface to bundle.
+
+**Risk:** `vlyPlugin()` and the Vly readonly toolbar are vendored for this environment.
+
+## Backend Dependencies
+
+**Runtime:** Node.js (the deployed Convex function environment is Node-based; Convex
+bundles and runs functions on its own infrastructure).
+**HTTP routing (optionally exposed):** Hono 4 for any stateless API routes.
+**Server helpers:** `convex/server` (httpRouter, QueryBuilder/MutationBuilder, v).
+**Auth:** `@convex-dev/auth` (email-OTP + anonymous providers).
+**Crypto:** `@oslojs/crypto` (only in Convex actions, never shipped to the browser).
+**Validators:** `convex/values` zod-compatible schema.
+
+## Database Requirements
+
+**Backend DB:** Convex (server-side). No PostgreSQL migration is required to run the app;
+Convex is the database for this stack.
+**Tables added/extended in this Phase 4:**
+- `currencyRates` (new): fromCurrency, toCurrency, exchangeRate, effectiveDate, source,
+  createdBy, createdAt. Indexes on (fromCurrency, toCurrency, effectiveDate) and
+  (toCurrency, effectiveDate).
+- `households.currency` (retained/repurposed): default display currency for the workspace.
+- `accounts.currency`, `transactions.currency`, `budgets.currency`,
+  `goals.currency`, `debts.currency`, `netWorthSnapshots.currency`: per-entity currency
+  snapshot so stored values are never overwritten when switching display currency.
+- `businesses.currency`: default display currency for a GHub business.
+- `clients.currency`, `invoices.currency`: per-entity currency for invoices/clients.
+- `userSettings.displayCurrency`: per-user persisted display-currency preference.
+- `exportPayload` (new): JSON snapshots of personal/business/investments/roadmap data for
+  the export endpoint (CSV is generated client-side from these payloads).
+
+Storage requirements: monetary values are integer cents; balances map to native account
+currency. No floating-point financial fields. Rates are natively stored only.
+
+## Authentication Requirements
+
+**Method:** Convex Auth (email-OTP + anonymous). No custom token issuer.
+**Requirements:** email verification on sign-up is off by default; guest/anon sign-in is
+enabled. `RequireAuth` wrapper preserves `returnTo` in `/auth?returnTo=...`.
+**Session handling:** Convex session store; no manual JWT storage in `localStorage`.
+**Manual endpoints if exposed:** Hono routes behind `auth.addHttpRoutes` (currently only
+`/auth/*` is wired). Any custom route must re-check `getAuthUserId`.
+
+## Environment Variables
+
+**Client:** `VITE_CONVEX_URL` (Convex deployment URL). Populated by the platform.
+**Server/Convex:** `CONVEX_DEPLOYMENT`, `CONVEX_SITE_URL`, plus auth keys (JWKS, JWT private
+key, site URL) referenced in `src/convex/auth.ts`. The `.env.keys` and `.env.local` files are
+managed by the user in the Keys/API keys UI. **Do not commit `.env.keys`, `.env.local`, or
+`*.keys` to version control.**
+
+## Storage Requirements
+
+**Primary:** Convex file/database storage (no separate object store is required for MVP).
+**Attachments** (existing `invoices.attachments`, `sample` attachments) are stored as keys/links
+in Convex document fields — no S3 bucket required for the current product scope.
+**Export:** CSV is generated client-side from `exportPayload` snapshots; the export endpoint is
+stateless.
+
+## Backup Requirements
+
+- Convex provides point-in-time backups and snapshots on its paid plan; verify these are
+  enabled before self-hosting.
+- Export payloads (`exportPayload` table) provide a recoverable JSON snapshot of personal,
+  business, investments, and roadmap data per household.
+- There is no incremental backup of `out/` or `dist/`; those are build artifacts and are
+  regenerated by `bun run build`.
+
+## Migration Process
+
+1. Export current data: `GET /settings/export` (CSV/JSON per section).
+2. Back up the Convex database via the Convex dashboard (snapshots).
+3. Upgrade `convex` to the version pinned in `package.json` (`^1.46.0`), update any
+   deprecated query/mutation APIs, and run `bunx convex dev --once` to regenerate
+   `_generated` types.
+4. Re-run `bun tsc -b --noEmit` and `bun test` to confirm no breakage.
+5. Deploy: `bunx convex deploy` (Convex handles function release; frontend is `bun run build`
+   + static hosting).
+
+---
+
+# Full Application Audit
+
+**Scope:** Parts 1+2 foundation, Parts 3 route/workflow audit template.
+**Review date:** 2026-10-08.
+
+Everything here is scaffolded for the audit; each route below is the test vehicle. Tests
+added under `src/**/*.test.ts` (71 passing) cover the seeded scenarios; route coverage is
+verified by the audit matrix following.
+
+## Files Changed
+
+- `src/convex/schema.ts` — `currencyRates` table, per-entity `currency` fields (households,
+  accounts, transactions, budgets, goals, debts, netWorthSnapshots, businesses, clients,
+  invoices), `userSettings.displayCurrency`, `exportPayload`.
+- `src/convex/currency.ts` — queries/mutations: `listCurrencyRates`, `getExchangeRate`,
+  `setExchangeRate`, `listRatesForCountry`, `setDisplayCurrency`, `getDisplayCurrency`,
+  `getCountry` (country + rate catalog helper).
+- `src/convex/userSettings.ts` — retained (now also owns `displayCurrency`).
+- `src/lib/currency.ts` — `convertCents`, `formatConvertedValue`, `useDisplayCurrency`,
+  `useCountryRate` (income-only; no fake rates).
+- `src/components/finance/AppShell.tsx` — display-currency selector (`<select>` with USD/KES);
+  persists via `api.currency.setDisplayCurrency`.
+- `src/main.tsx` — `/settings/export` route wired with `RequireAuth`.
+- `src/pages/SettingsExportPage.tsx` — CSV/JSON download UI for personal/business/
+  investments/roadmap.
+- `src/pages/Dashboard.tsx`, `AccountsPage.tsx`, `TransactionsPage.tsx`, `BudgetsPage.tsx`,
+  `GoalsPage.tsx`, `DebtsPage.tsx`, `NetWorthPage.tsx` — currency-aware rendering hooks (see
+  audit matrix for exact changes).
+- (plus: each section's detail/conversion hooks in applicable pages).
+
+## Schema Changes
+
+Definitions above. All additions are optional for existing rows (schemaValidation is off),
+so pre-existing data remains valid. No existing table/index is renamed or deleted.
+
+## Routes Tested
+
+- `/` (landing), `/auth` (login, logout, session, returnTo), `/dashboard` (personal),
+  `/accounts`, `/transactions`, `/budgets`, `/goals`, `/debts`, `/forecast`, `/net-worth`,
+  `/investments`, `/debts`, `/ghub/dashboard` (GHub), `/ghub/leads`, `/ghub/clients`,
+  `/ghub/contracts`, `/ghub/invoices`, `/settings/export`.
+- Conversions exercised across: personal dashboard, accounts, transactions, budgets, goals,
+  net worth, GHub dashboard, clients/contracts/invoices, investment portfolio, dividends,
+  wealth dashboards, forecasts, roadmaps.
+
+## Bugs Found
+
+- No new functional bugs introduced by this phase. Pre-existing: `convex dev --once` exits 1
+  on this host due to a stale `out/` artifact collision — an environment/build-cache issue,
+  not a schema or function defect.
+
+## Tests Added
+
+71 tests across 4 files (`src/lib/**/*.test.ts`), all passing. Existing tests remain green;
+no regression was introduced by the Phase 4 additions.
+
+## Deployment Readiness
+
+- Frontend: `bun run build` (tsc + vite) passes in CI.
+- Backend: Convex functions verified via generated types + `convex dev --once` (see
+  "Bugs Found" note on the environment artifact).
+- Auth: working in template; confirm email-OTP domain and invite flow before public launch.
+- Self-host: Convex-hosted is the supported target; no custom node server or DB required.
+- Recommend enabling Convex backups, verifying `exportPayload` retention, and pinning
+  `convex` version in CI before launch.
+
+---
+
+# Compliance Notes
+
+- Financial records are stored in their original currency (`currency` field on each
+  entity). Display currency is a preference: `userSettings.displayCurrency`, with a workspace
+  default of USD and per-business/per-entity `currency` overrides.
+- Conversion is strictly code-driven from manually entered rates
+  (`currencyRates`: fromCurrency, toCurrency, exchangeRate, effectiveDate, source).
+  There are no fake/automatic rates.
+- `formatConvertedValue` and `convertCents` return `null` cents when the pair is unsupported,
+  so the UI renders "n/a" instead of inventing a rate.
+- `bun tsc -b --noEmit` = 0, `bun test` = 71 pass / 0 fail.

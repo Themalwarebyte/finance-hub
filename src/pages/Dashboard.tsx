@@ -18,6 +18,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { api } from "@/convex/_generated/api";
 import { formatMoney } from "@/lib/format";
+import { useDisplayCurrency, convertCents } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import type { FunctionReturnType } from "convex/server";
 import { useQuery } from "convex/react";
