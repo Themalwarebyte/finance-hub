@@ -1,6 +1,7 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { DEFAULT_HOUSEHOLD_CURRENCY } from "./schema";
 import {
   generateInviteCode,
   getViewer,
@@ -70,7 +71,8 @@ export const create = mutation({
 
     const householdId = await ctx.db.insert("households", {
       name: trimmed && trimmed.length > 0 ? trimmed : fallbackName,
-      currency: "USD",
+      // Kenya Mode: new workspaces default to the Kenyan Shilling.
+      currency: DEFAULT_HOUSEHOLD_CURRENCY,
       inviteCode: generateInviteCode(),
       createdBy: userId,
     });

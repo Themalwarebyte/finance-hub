@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { DEFAULT_INVOICE_CURRENCY } from "./schema";
 import {
   assertBusinessOwns,
   requireBusinessOwner,
@@ -375,6 +376,7 @@ export const createInvoice = mutation({
       dueDate: args.dueDate,
       paidCents: 0,
       status: "issued",
+      currency: DEFAULT_INVOICE_CURRENCY,
       notes: args.notes,
       createdBy: viewer.userId,
       createdAt: Date.now(),

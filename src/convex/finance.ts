@@ -12,6 +12,7 @@ import {
   type ScheduledEvent,
 } from "./lib";
 import { monthRange, resolvePeriod } from "./periods";
+import { DEFAULT_HOUSEHOLD_CURRENCY } from "./schema";
 
 export const DEFAULT_WINDOW_DAYS = 30;
 
@@ -205,7 +206,7 @@ export const overview = query({
       windowDays,
       generatedAt: now,
       hasData: accounts.length > 0,
-      currency: "USD",
+      currency: DEFAULT_HOUSEHOLD_CURRENCY, // Kenya Mode: dashboards report in KES
       totalBalance,
       assets,
       liabilities,

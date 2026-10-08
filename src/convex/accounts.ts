@@ -2,7 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { getViewer, requireViewer } from "./lib";
-import { accountKindValidator, returnBasisValidator } from "./schema";
+import { accountKindValidator, returnBasisValidator, DEFAULT_ACCOUNT_CURRENCY } from "./schema";
 
 const MAX_CENTS = 1_000_000_00_000; // $1B guard against typos
 
@@ -116,7 +116,7 @@ export const create = mutation({
       returnBasis: args.returnBasis,
       reference: args.reference?.trim().slice(0, 60) || undefined,
       notes: args.notes?.trim().slice(0, 500) || undefined,
-      currency: args.currency?.trim().toUpperCase().slice(0, 3) || undefined,
+      currency: args.currency?.trim().toUpperCase().slice(0, 3) || DEFAULT_ACCOUNT_CURRENCY,
       includeInNetWorth: args.includeInNetWorth ?? true,
       createdAt: Date.now(),
     });
@@ -175,7 +175,7 @@ export const update = mutation({
       patch.notes = args.notes.trim().slice(0, 500) || undefined;
     }
     if (args.currency !== undefined) {
-      patch.currency = args.currency.trim().toUpperCase().slice(0, 3) || undefined;
+      patch.currency = args.currency.trim().toUpperCase().slice(0, 3) || DEFAULT_ACCOUNT_CURRENCY;
     }
     if (args.includeInNetWorth !== undefined) {
       patch.includeInNetWorth = args.includeInNetWorth;

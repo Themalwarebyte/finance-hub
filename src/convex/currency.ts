@@ -3,6 +3,10 @@ import { query } from "./_generated/server";
 import { mutation } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Id } from "./_generated/dataModel";
+import {
+  DEFAULT_CURRENCY_MODE,
+  DEFAULT_DISPLAY_CURRENCY,
+} from "./schema";
 
 /** List all stored exchange rates (manually managed; never auto-generated). */
 export const listCurrencyRates = query({
@@ -130,7 +134,49 @@ export const getDisplayCurrency = query({
       .query("userSettings")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .first();
-    return settings?.displayCurrency ?? null;
+    // Kenya Mode: KES is the default display currency; USD stays selectable
+    // via the stored preference when the global mode is enabled.
+    return settings?.displayCurrency ?? DEFAULT_DISPLAY_CURRENCY;
+  },
+});
+
+/**
+ * Currency mode: "kes_first" (Kenya Mode, default) or "global"/
+ * "global_multi_currency" (future expansion, USD available).
+ */
+export const getCurrencyMode = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) return DEFAULT_CURRENCY_MODE;
+    const settings = await ctx.db
+      .query("userSettings")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .first();
+    return settings?.currencyMode ?? DEFAULT_CURRENCY_MODE;
+  },
+});
+
+export const setCurrencyMode = mutation({
+  args: {
+    mode: v.union(
+      v.literal("kes_first"),
+      v.literal("global"),
+      v.literal("global_multi_currency"),
+    ),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) return;
+    const settings = await ctx.db
+      .query("userSettings")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .first();
+    if (settings) {
+      await ctx.db.patch(settings._id, { currencyMode: args.mode });
+    } else {
+      await ctx.db.insert("userSettings", { userId, currencyMode: args.mode });
+    }
   },
 });
 

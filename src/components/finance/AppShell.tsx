@@ -269,6 +269,7 @@ export function AppShell() {
   const household = useQuery(api.households.current);
   const loadSample = useMutation(api.sample.load);
   const displayCurrency = useQuery(api.currency.getDisplayCurrency, {});
+  const currencyMode = useQuery(api.currency.getCurrencyMode, {});
   const countryRate = useQuery(api.currency.getCountry, {
     code: displayCurrency ?? "",
   });
@@ -277,6 +278,9 @@ export function AppShell() {
   const updateDisplayCurrency = (next: string) => {
     void setDisplayCurrency({ country: next });
   };
+  // Kenya Mode hides the switcher in the UI; the mutation above (and every
+  // backend conversion path) stays fully functional for Global mode.
+  const switcherEnabled = currencyMode !== null && currencyMode !== "kes_first";
 
   const [recordOpen, setRecordOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
@@ -444,21 +448,34 @@ export function AppShell() {
             <div className="flex items-center gap-2">
               <div className="hidden sm:block">{workspaceButton}</div>
               <div className="hidden sm:flex items-center gap-1.5">
-                <div className="flex items-center gap-1.5 rounded-full border border-border/70 px-3 py-1.5">
-                  <Globe className="size-3.5 text-muted-foreground" />
-                  <select
-                    value={displayCurrency ?? "USD"}
-                    onChange={(e) => {
-                      const next = e.target.value;
-                      void updateDisplayCurrency(next);
-                    }}
-                    className="bg-transparent text-sm font-medium text-foreground outline-none focus:ring-0"
-                    aria-label="Display currency"
+                {switcherEnabled ? (
+                  <div className="flex items-center gap-1.5 rounded-full border border-border/70 px-3 py-1.5">
+                    <Globe className="size-3.5 text-muted-foreground" />
+                    <select
+                      value={displayCurrency ?? "KES"}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        void updateDisplayCurrency(next);
+                      }}
+                      className="bg-transparent text-sm font-medium text-foreground outline-none focus:ring-0"
+                      aria-label="Display currency"
+                    >
+                      <option value="KES">KES (Kenyan Shilling)</option>
+                      <option value="USD">USD (US Dollar)</option>
+                    </select>
+                  </div>
+                ) : (
+                  <div
+                    className="flex items-center gap-1.5 rounded-full border border-border/70 px-3 py-1.5"
+                    title="Kenya Mode is on — all amounts display in Kenyan Shillings"
                   >
-                    <option value="USD">USD (US Dollar)</option>
-                    <option value="KES">KES (Kenyan Shilling)</option>
-                  </select>
-                </div>
+                    <Globe className="size-3.5 text-muted-foreground" />
+                    <span className="text-sm font-medium text-foreground">KES</span>
+                    <span className="bg-primary/10 text-primary rounded-full px-1.5 py-0.5 text-[10px] font-semibold">
+                      Kenya Mode
+                    </span>
+                  </div>
+                )}
               </div>
               <Button className="gap-2" onClick={() => setRecordOpen(true)}>
                 <ArrowRightLeft className="size-4" />

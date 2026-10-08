@@ -2,7 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { getViewer, requireViewer } from "./lib";
-import { directionValidator } from "./schema";
+import { directionValidator, DEFAULT_TRANSACTION_CURRENCY } from "./schema";
 
 const MAX_CENTS = 1_000_000_00_000; // $1B guard against typos
 
@@ -150,6 +150,7 @@ export const create = mutation({
       date: args.date,
       createdBy: viewer.userId,
       createdAt: Date.now(),
+      currency: account.currency ?? DEFAULT_TRANSACTION_CURRENCY,
       transferAccountId,
       subcategory: args.subcategory?.trim().slice(0, 40) || undefined,
       merchant: args.merchant?.trim().slice(0, 80) || undefined,

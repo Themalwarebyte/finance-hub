@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import { getViewer, requireViewer } from "./lib";
+import { DEFAULT_GOAL_CURRENCY } from "./schema";
 
 const MAX_CENTS = 1_000_000_00_000;
 
@@ -125,6 +126,7 @@ export const create = mutation({
       archived: false,
       createdBy: viewer.userId,
       createdAt: Date.now(),
+      currency: DEFAULT_GOAL_CURRENCY,
     });
   },
 });

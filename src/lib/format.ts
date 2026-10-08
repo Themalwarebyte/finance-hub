@@ -1,28 +1,32 @@
 const DAY = 86_400_000;
 const MINUS = "\u2212";
 
-const money = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
+/**
+ * Kenya Mode: money renders in Kenyan Shillings by default ("KSh 1,000").
+ * Multi-currency architecture is preserved — the formatter accepts an
+ * explicit currency code; KES is simply the default.
+ */
+export const PRIMARY_CURRENCY = "KES" as const;
+export const PRIMARY_CURRENCY_SYMBOL = "KSh" as const;
+
+const numberFmt = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
 
-const moneyRound = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
+const numberRound = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 0,
   maximumFractionDigits: 0,
 });
 
-/** 1234567 cents -> "$12,345.67" */
+/** 1234567 cents -> "KSh 12,345.67" */
 export function formatMoney(
   cents: number,
   options: { cents?: boolean } = {},
 ): string {
   const value = cents / 100;
-  const formatted = options.cents === false ? moneyRound.format(value) : money.format(value);
-  return formatted.replace("-", MINUS);
+  const formatted = options.cents === false ? numberRound.format(value) : numberFmt.format(value);
+  return `${value < 0 ? MINUS : ""}${PRIMARY_CURRENCY_SYMBOL} ${formatted.replace("-", "")}`;
 }
 
 /** 1234567 -> "+$12,345.67" / "\u2212$12,345.67"; transfers show plain. */
@@ -35,13 +39,23 @@ export function formatSignedMoney(
   return `${sign}${formatMoney(Math.abs(cents))}`;
 }
 
-/** Axis-friendly: 12345678 -> "$123.5k" */
+/**
+ * Axis/dash-friendly compact money: "KSh 1.5M", "KSh 56.29B", "KSh 1,000".
+ * Billions use two decimals per the spec (56.29B); millions one.
+ */
 export function formatCompactMoney(cents: number): string {
   const value = cents / 100;
   const abs = Math.abs(value);
-  if (abs >= 1_000_000) return `${value < 0 ? MINUS : ""}$${(abs / 1_000_000).toFixed(1)}M`;
-  if (abs >= 1_000) return `${value < 0 ? MINUS : ""}$${(abs / 1_000).toFixed(1)}k`;
-  return `${value < 0 ? MINUS : ""}$${abs.toFixed(0)}`;
+  if (abs >= 1_000_000_000) {
+    return `${value < 0 ? MINUS : ""}${PRIMARY_CURRENCY_SYMBOL} ${(abs / 1_000_000_000).toFixed(2)}B`;
+  }
+  if (abs >= 1_000_000) {
+    return `${value < 0 ? MINUS : ""}${PRIMARY_CURRENCY_SYMBOL} ${(abs / 1_000_000).toFixed(1)}M`;
+  }
+  if (abs >= 1_000) {
+    return `${value < 0 ? MINUS : ""}${PRIMARY_CURRENCY_SYMBOL} ${numberRound.format(abs)}`;
+  }
+  return `${value < 0 ? MINUS : ""}${PRIMARY_CURRENCY_SYMBOL} ${abs.toFixed(0)}`;
 }
 
 /** Format a percentage like 7 -> "7%" or 0.45 -> "0.45%". */

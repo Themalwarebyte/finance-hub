@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { mutation, query } from "./_generated/server";
 import { requireViewer } from "./lib";
+import { DEFAULT_INVESTMENT_CURRENCY } from "./schema";
 import type { Id } from "./_generated/dataModel";
 import {
   averageCostPerUnit,
@@ -113,6 +114,7 @@ export const createSecurity = mutation({
       name: args.name,
       assetClass: args.assetClass,
       // costBasis intentionally left unset — user must enter it.
+      currency: DEFAULT_INVESTMENT_CURRENCY,
       brokerageAccountId: args.brokerageAccountId,
       createdAt: Date.now(),
     });
@@ -122,6 +124,7 @@ export const createSecurity = mutation({
       kind: "adjustment",
       qtyMicro: qty,
       amountCents: 0,
+      currency: DEFAULT_INVESTMENT_CURRENCY,
       note: "Starting position — cost basis requires user entry",
       date: Date.now(),
       createdBy: viewer.userId,
@@ -251,6 +254,7 @@ export const recordTxn = mutation({
         qtyMicro,
         amountCents: total,
         feeCents: fee,
+        currency: DEFAULT_INVESTMENT_CURRENCY,
         cashAccountId: args.cashAccountId,
         note: args.note,
         date: args.date ?? Date.now(),

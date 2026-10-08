@@ -2,15 +2,36 @@ import { authTables } from "@convex-dev/auth/server";
 import { defineSchema, defineTable } from "convex/server";
 import { Infer, v } from "convex/values";
 
-// Supported display currencies (initial). Financial records are stored in
-// their original currency; these only control display and conversion.
+// Supported display currencies. KES is the primary currency for the current
+// operating phase (Kenya Mode); USD remains supported for future global
+// expansion. Financial records are stored in their original currency; these
+// only control display and conversion.
 export const SUPPORTED_CURRENCIES = ["KES", "USD"] as const;
 
 export type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number];
 
-export const DEFAULT_DISPLAY_CURRENCY: SupportedCurrency = "USD";
+/**
+ * Kenya Mode (Phase 4.2): KES is the primary and default currency for every
+ * new workspace and record. The display-currency switcher is disabled in the
+ * UI, but USD conversion and storage stay fully supported in the backend.
+ */
+export const DEFAULT_DISPLAY_CURRENCY: SupportedCurrency = "KES";
 
 export const DEFAULT_HOUSEHOLD_CURRENCY = "KES";
+export const DEFAULT_ACCOUNT_CURRENCY = "KES";
+export const DEFAULT_TRANSACTION_CURRENCY = "KES";
+export const DEFAULT_BUDGET_CURRENCY = "KES";
+export const DEFAULT_GOAL_CURRENCY = "KES";
+export const DEFAULT_DEBT_CURRENCY = "KES";
+export const DEFAULT_BUSINESS_CURRENCY = "KES";
+export const DEFAULT_INVOICE_CURRENCY = "KES";
+export const DEFAULT_INVESTMENT_CURRENCY = "KES";
+export const DEFAULT_ROADMAP_CURRENCY = "KES";
+
+/** Operational currency mode for the platform. "kes_first" is Kenya Mode. */
+export const CURRENCY_MODES = ["kes_first", "global", "global_multi_currency"] as const;
+export type CurrencyMode = (typeof CURRENCY_MODES)[number];
+export const DEFAULT_CURRENCY_MODE: CurrencyMode = "kes_first";
 
 // default user roles. can add / remove based on the project as needed
 export const ROLES = {
@@ -418,6 +439,7 @@ const schema = defineSchema(
         v.literal("overdue"),
       ),
       etimsRef: v.optional(v.string()), // manually stored KRA eTIMS reference
+      currency: v.optional(v.string()), // invoice currency; Kenya Mode defaults to KES
       etimsStatus: v.optional(v.union(
         v.literal("none"),
         v.literal("submitted"),
@@ -478,8 +500,8 @@ const schema = defineSchema(
       createdAt: v.number(),
     }).index("by_business", ["businessId"]),
 
-    // Tiny per-user preference stores: business-view switch and display
-    // currency for conversion.
+    // Tiny per-user preference stores: business-view switch, display
+    // currency for conversion, and the currency mode (Kenya-first default).
     userSettings: defineTable({
       userId: v.id("users"),
       bizView: v.optional(v.union(
@@ -488,6 +510,11 @@ const schema = defineSchema(
         v.literal("consolidated"),
       )),
       displayCurrency: v.optional(v.string()), // e.g. "KES" / "USD"
+      currencyMode: v.optional(v.union(
+        v.literal("kes_first"),
+        v.literal("global"),
+        v.literal("global_multi_currency"),
+      )),
     }).index("by_user", ["userId"]),
 
     // Persisted export payload (REGEXPEXCLUDED, snapshot of real records).
@@ -525,6 +552,7 @@ const schema = defineSchema(
       // Starting positions entered manually; unknown cost bases stay null
       // until the user supplies them.
       costBasisCents: v.optional(v.number()), // null = requires user entry
+      currency: v.optional(v.string()), // pricing currency; Kenya Mode defaults to KES
       brokerageAccountId: v.optional(v.id("accounts")), // cash pool for trades
       createdAt: v.number(),
     }).index("by_household", ["householdId"]),
@@ -557,6 +585,7 @@ const schema = defineSchema(
       qtyMicro: v.optional(v.number()), // fixed-point; required for unit kinds
       amountCents: v.number(), // signed cash effect: buys negative, sales/dividends positive
       feeCents: v.optional(v.number()),
+      currency: v.optional(v.string()), // portfolio currency; Kenya Mode defaults to KES
       cashAccountId: v.optional(v.id("accounts")), // brokerage cash pool
       realizedGainCents: v.optional(v.number()), // filled on sales
       note: v.optional(v.string()),
