@@ -23,10 +23,13 @@ import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import {
   ArrowRightLeft,
+  Briefcase,
   Building2,
   CalendarClock,
   CreditCard,
   FileText,
+  Gauge,
+  KanbanSquare,
   LayoutDashboard,
   Landmark,
   LineChart,
@@ -97,8 +100,11 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "GHub Business",
     items: [
+      { to: "/ghub/command-center", label: "CEO command center", icon: Gauge },
       { to: "/ghub/dashboard", label: "GHub dashboard", icon: Building2 },
+      { to: "/ghub/leads", label: "Lead pipeline", icon: KanbanSquare },
       { to: "/ghub/clients", label: "Clients & leads", icon: Users },
+      { to: "/ghub/services", label: "Services catalogue", icon: Briefcase },
       { to: "/ghub/contracts", label: "Proposals & contracts", icon: FileText },
       { to: "/ghub/invoices", label: "Invoices & payments", icon: Receipt },
       { to: "/ghub/financials", label: "Business financials", icon: Landmark },

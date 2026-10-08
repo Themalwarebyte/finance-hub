@@ -24,30 +24,77 @@ export function normalizeView(view: string | null | undefined): ViewKey {
 // ---------------------------------------------------------------------------
 
 export const SALES_STAGES = [
-  "New",
+  "New Lead",
   "Contacted",
-  "Discovery",
-  "Proposal",
+  "Conversation Started",
+  "Discovery Meeting",
+  "Proposal Sent",
   "Negotiation",
   "Won",
   "Lost",
 ] as const;
 export type SalesStage = (typeof SALES_STAGES)[number];
 
-/** Order in the pipeline. Lost/Won are terminal. */
-export function stageOrder(stage: string): number {
-  const index = SALES_STAGES.indexOf(stage as SalesStage);
-  return index === -1 ? 0 : index;
+/** Pre-rename stage names already stored in records; mapped forward. */
+export const LEGACY_STAGE_ALIASES: Record<string, SalesStage> = {
+  New: "New Lead",
+  Discovery: "Discovery Meeting",
+  Proposal: "Proposal Sent",
+};
+
+/** Map a stored stage name (old or new) to its canonical stage. */
+export function canonicalStage(stage: string): SalesStage | null {
+  if ((SALES_STAGES as readonly string[]).includes(stage)) {
+    return stage as SalesStage;
+  }
+  return LEGACY_STAGE_ALIASES[stage] ?? null;
 }
 
-/** Is the lead still open (not Won/Lost)? */
+/** Fallback win probability per stage (%). Leads may override this. */
+export const STAGE_DEFAULT_PROBABILITY: Record<SalesStage, number> = {
+  "New Lead": 5,
+  Contacted: 10,
+  "Conversation Started": 25,
+  "Discovery Meeting": 40,
+  "Proposal Sent": 55,
+  Negotiation: 70,
+  Won: 100,
+  Lost: 0,
+};
+
+/** Effective win probability for a lead: explicit value or stage default. */
+export function leadProbability(
+  stage: string,
+  probabilityPct?: number | null,
+): number {
+  if (
+    typeof probabilityPct === "number" &&
+    Number.isFinite(probabilityPct) &&
+    probabilityPct >= 0 &&
+    probabilityPct <= 100
+  ) {
+    return probabilityPct;
+  }
+  const canonical = canonicalStage(stage);
+  return canonical ? STAGE_DEFAULT_PROBABILITY[canonical] : 0;
+}
+
+/** Order in the pipeline. Lost/Won are terminal. */
+export function stageOrder(stage: string): number {
+  const canonical = canonicalStage(stage);
+  if (!canonical) return 0;
+  return SALES_STAGES.indexOf(canonical);
+}
+
+/** Is the lead still open (not Won/Lost)? Legacy names are canonicalized. */
 export function stageIsOpen(stage: string): boolean {
-  return stage !== "Won" && stage !== "Lost";
+  const canonical = canonicalStage(stage);
+  return canonical !== "Won" && canonical !== "Lost";
 }
 
 /** A Won opportunity is convertible into a client + contract. */
 export function isConvertible(stage: string): boolean {
-  return stage === "Won";
+  return canonicalStage(stage) === "Won";
 }
 
 /** Sum of estimated contract value of open leads — the pipeline value. */
@@ -55,7 +102,7 @@ export function pipelineValue(
   leads: { stage: string; estimatedValueCents: number }[],
 ): number {
   return leads
-    .filter((lead) => stageIsOpen(lead.stage))
+    .filter((lead) => stageIsOpen(canonicalStage(lead.stage) ?? "New"))
     .reduce((sum, lead) => sum + lead.estimatedValueCents, 0);
 }
 
@@ -66,11 +113,193 @@ export function nextFollowUp(
 ): number | null {
   const future = leads
     .filter(
-      (lead) => stageIsOpen(lead.stage) && (lead.nextFollowUp ?? 0) > now,
+      (lead) =>
+        stageIsOpen(lead.stage) && (lead.nextFollowUp ?? 0) > now,
     )
     .map((lead) => lead.nextFollowUp as number)
     .sort((a, b) => a - b);
   return future.length > 0 ? future[0] : null;
+}
+
+// ---------------------------------------------------------------------------
+// Follow-up reminders (pure, timestamp-based)
+// ---------------------------------------------------------------------------
+
+export type FollowUpState = "overdue" | "today" | "upcoming" | null;
+
+/**
+ * Classify a lead's follow-up date against `now`:
+ * overdue (past), today (same calendar day), upcoming (future), or null when
+ * no follow-up is scheduled or the lead is closed.
+ */
+export function followUpState(
+  nextFollowUpMs: number | null | undefined,
+  now: number,
+): FollowUpState {
+  if (nextFollowUpMs === null || nextFollowUpMs === undefined) return null;
+  const dayOf = (ms: number) => {
+    const d = new Date(ms);
+    return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  };
+  const due = dayOf(nextFollowUpMs);
+  const today = dayOf(now);
+  if (due < today) return "overdue";
+  if (due === today) return "today";
+  return "upcoming";
+}
+
+// ---------------------------------------------------------------------------
+// Pipeline analytics (pure; integer cents)
+// ---------------------------------------------------------------------------
+
+export type PipelineLead = {
+  stage: string;
+  estimatedValueCents: number;
+  probabilityPct?: number | null;
+  createdAt: number;
+  closedAtMs?: number | null;
+};
+
+export type PipelineMetrics = {
+  totalLeads: number;
+  activeOpportunities: number;
+  pipelineValueCents: number;
+  weightedPipelineValueCents: number;
+  conversionRatePct: number | null;
+  averageDealSizeCents: number | null;
+  averageSalesCycleMs: number | null;
+  wonRevenueThisMonthCents: number;
+  wonCount: number;
+  lostCount: number;
+};
+
+/** True when the timestamp falls in calendar month of `now` (UTC). */
+function inMonth(ms: number | null | undefined, now: number): boolean {
+  if (ms === null || ms === undefined) return false;
+  const a = new Date(ms);
+  const b = new Date(now);
+  return (
+    a.getUTCFullYear() === b.getUTCFullYear() &&
+    a.getUTCMonth() === b.getUTCMonth()
+  );
+}
+
+/**
+ * All pipeline metrics from recorded lead rows only. Weighted value uses each
+ * lead's own probability (or its stage default). Conversion rate = won ÷
+ * (won + lost); null when nothing has closed yet.
+ */
+export function pipelineMetrics(leads: PipelineLead[], now: number): PipelineMetrics {
+  let activeOpportunities = 0;
+  let pipelineValueCents = 0;
+  let weightedCents = 0;
+  let wonCount = 0;
+  let lostCount = 0;
+  let wonDealSum = 0;
+  let cycleSum = 0;
+  let cycleCount = 0;
+
+  for (const lead of leads) {
+    const canonical = canonicalStage(lead.stage);
+    if (canonical === "Won") {
+      wonCount += 1;
+      wonDealSum += lead.estimatedValueCents;
+      const closed = lead.closedAtMs ?? lead.createdAt;
+      if (closed >= lead.createdAt) {
+        cycleSum += closed - lead.createdAt;
+        cycleCount += 1;
+      }
+    } else if (canonical === "Lost") {
+      lostCount += 1;
+    } else {
+      activeOpportunities += 1;
+      pipelineValueCents += lead.estimatedValueCents;
+      weightedCents +=
+        Math.round((lead.estimatedValueCents * leadProbability(lead.stage, lead.probabilityPct)) / 100);
+    }
+  }
+
+  // Won revenue this month uses closedAtMs (falls back to createdAt).
+  const wonRevenueThisMonth = leads
+    .filter(
+      (lead) =>
+        canonicalStage(lead.stage) === "Won" &&
+        inMonth(lead.closedAtMs ?? lead.createdAt, now),
+    )
+    .reduce((s, lead) => s + lead.estimatedValueCents, 0);
+
+  return {
+    totalLeads: leads.length,
+    activeOpportunities,
+    pipelineValueCents,
+    weightedPipelineValueCents: weightedCents,
+    conversionRatePct:
+      wonCount + lostCount > 0
+        ? Math.round((wonCount / (wonCount + lostCount)) * 100)
+        : null,
+    averageDealSizeCents:
+      wonCount > 0 ? Math.round(wonDealSum / wonCount) : null,
+    averageSalesCycleMs:
+      cycleCount > 0 ? Math.round(cycleSum / cycleCount) : null,
+    wonRevenueThisMonthCents: wonRevenueThisMonth,
+    wonCount,
+    lostCount,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Weekly CEO activity tracker (goals, NOT financial transactions)
+// ---------------------------------------------------------------------------
+
+export const ACTIVITY_KINDS = [
+  "businesses_researched",
+  "new_contacts",
+  "follow_ups_completed",
+  "discovery_meetings",
+  "proposals_sent",
+  "contracts_won",
+] as const;
+export type ActivityKind = (typeof ACTIVITY_KINDS)[number];
+
+/** Initial suggested weekly targets (editable in the UI). */
+export const DEFAULT_ACTIVITY_TARGETS: Record<ActivityKind, number> = {
+  businesses_researched: 15,
+  new_contacts: 10,
+  follow_ups_completed: 5,
+  discovery_meetings: 2,
+  proposals_sent: 1,
+  contracts_won: 1,
+};
+
+/** Monday 00:00 UTC of the week containing `now`. */
+export function weekStartMs(now: number): number {
+  const d = new Date(now);
+  const day = (d.getUTCDay() + 6) % 7; // Monday = 0
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - day);
+}
+
+export type ActivityStatus = "ahead" | "on_track" | "behind";
+
+/**
+ * Status for a weekly activity goal: expected pace is elapsed portion of the
+ * week (same 110% / 90% thresholds as financial milestones).
+ */
+export function activityStatus(
+  count: number,
+  target: number,
+  now: number,
+): { pct: number; expectedPct: number; status: ActivityStatus } {
+  const pct = target > 0 ? Math.min(100, (count / target) * 100) : 0;
+  const weekMs = 7 * DAY_MS;
+  const elapsed = Math.max(0, now - weekStartMs(now));
+  const expectedPct = Math.min(100, Math.max(0, (elapsed / weekMs) * 100));
+  const ratio = expectedPct > 0 ? pct / expectedPct : null;
+  let status: ActivityStatus = "on_track";
+  if (ratio !== null) {
+    if (ratio >= 1.1) status = "ahead";
+    else if (ratio < 0.9) status = "behind";
+  }
+  return { pct, expectedPct, status };
 }
 
 // ---------------------------------------------------------------------------

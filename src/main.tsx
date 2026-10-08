@@ -29,6 +29,9 @@ const ContractsPage = lazy(() => import("./pages/ContractsPage.tsx"));
 const InvoicesPage = lazy(() => import("./pages/InvoicesPage.tsx"));
 const BusinessFinancialsPage = lazy(() => import("./pages/BusinessFinancialsPage.tsx"));
 const RoadmapPage = lazy(() => import("./pages/RoadmapPage.tsx"));
+const CommandCenterPage = lazy(() => import("./pages/CommandCenterPage.tsx"));
+const LeadsPage = lazy(() => import("./pages/LeadsPage.tsx"));
+const ServicesPage = lazy(() => import("./pages/ServicesPage.tsx"));
 const InvestmentsDashboardPage = lazy(() => import("./pages/InvestmentsDashboardPage.tsx"));
 const PortfolioPage = lazy(() => import("./pages/PortfolioPage.tsx"));
 const InvestmentsTransactionsPage = lazy(() => import("./pages/InvestmentsTransactionsPage.tsx"));
@@ -164,6 +167,9 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="/investments" element={<InvestmentsPage />} />
                 <Route path="/debts" element={<DebtsPage />} />
                 <Route path="/ghub/dashboard" element={<GHubDashboard />} />
+                <Route path="/ghub/command-center" element={<CommandCenterPage />} />
+                <Route path="/ghub/leads" element={<LeadsPage />} />
+                <Route path="/ghub/services" element={<ServicesPage />} />
                 <Route path="/ghub/clients" element={<ClientsPage />} />
                 <Route path="/ghub/contracts" element={<ContractsPage />} />
                 <Route path="/ghub/invoices" element={<InvoicesPage />} />

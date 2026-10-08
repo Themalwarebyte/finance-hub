@@ -7,7 +7,11 @@ import {
   requireBusinessViewer,
 } from "./businessAccess";
 import type { Id } from "./_generated/dataModel";
-import { allocatePayment, SALES_STAGES } from "../lib/business";
+import {
+  allocatePayment,
+  canonicalStage,
+  pipelineMetrics as computePipelineMetrics,
+} from "../lib/business";
 
 // ---------------------------------------------------------------------------
 // Leads & clients
@@ -26,10 +30,14 @@ const leadFields = {
   lastContactDate: v.optional(v.number()),
   nextFollowUp: v.optional(v.number()),
   notes: v.optional(v.string()),
+  // Phase 4 additions (all optional):
+  location: v.optional(v.string()),
+  probability: v.optional(v.number()), // 0..100
+  assignedOwner: v.optional(v.id("users")),
 };
 
 function validateStage(stage: string): void {
-  if (!(SALES_STAGES as readonly string[]).includes(stage)) {
+  if (canonicalStage(stage) === null) {
     throw new ConvexError(`Unknown sales stage: ${stage}`);
   }
 }
@@ -38,15 +46,20 @@ export const createLead = mutation({
   args: leadFields,
   handler: async (ctx, args) => {
     const viewer = await requireBusinessViewer(ctx);
-    validateStage(args.stage);
+    const canonical = canonicalStage(args.stage);
+    if (canonical === null) {
+      throw new ConvexError(`Unknown sales stage: ${args.stage}`);
+    }
     return ctx.db.insert("clients", {
       businessId: viewer.businessId,
       isClient: false,
-      activityLog: [stamp(viewer.userId, `Lead created (${args.stage})`)],
+      activityLog: [stamp(viewer.userId, `Lead created (${canonical})`)],
       archived: false,
       createdBy: viewer.userId,
       createdAt: Date.now(),
       ...args,
+      stage: canonical,
+      assignedOwner: args.assignedOwner ?? viewer.userId,
     });
   },
 });
@@ -84,13 +97,62 @@ export const setLeadStage = mutation({
   args: { leadId: v.id("clients"), stage: v.string() },
   handler: async (ctx, args) => {
     const viewer = await requireBusinessViewer(ctx);
-    validateStage(args.stage);
+    const canonical = canonicalStage(args.stage);
+    if (canonical === null) {
+      throw new ConvexError(`Unknown sales stage: ${args.stage}`);
+    }
+    const row = await ctx.db.get(args.leadId);
+    assertBusinessOwns(row, viewer.businessId);
+    // Terminal stages stamp when the deal closed; reopening clears the stamp.
+    const closedAtMs =
+      canonical === "Won" || canonical === "Lost" ? Date.now() : undefined;
+    await ctx.db.patch(args.leadId, {
+      stage: canonical,
+      ...(closedAtMs !== undefined ? { closedAtMs } : { closedAtMs: undefined }),
+      activityLog: appendActivity(row.activityLog, stamp(viewer.userId, `Stage changed to ${canonical}`)),
+    });
+  },
+});
+
+/** Log a completed contact touch: sets lastContact, optionally reschedules. */
+export const recordFollowUp = mutation({
+  args: {
+    leadId: v.id("clients"),
+    nextFollowUp: v.optional(v.number()),
+    notes: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const viewer = await requireBusinessViewer(ctx);
     const row = await ctx.db.get(args.leadId);
     assertBusinessOwns(row, viewer.businessId);
     await ctx.db.patch(args.leadId, {
-      stage: args.stage,
-      activityLog: appendActivity(row.activityLog, stamp(viewer.userId, `Stage changed to ${args.stage}`)),
+      lastContactDate: Date.now(),
+      ...(args.nextFollowUp !== undefined ? { nextFollowUp: args.nextFollowUp } : {}),
+      ...(args.notes !== undefined ? { notes: args.notes } : {}),
+      activityLog: appendActivity(row.activityLog, stamp(viewer.userId, "Follow-up completed")),
     });
+  },
+});
+
+/** Pipeline analytics from recorded lead rows (no projections). */
+export const pipelineMetrics = query({
+  args: {},
+  handler: async (ctx) => {
+    const viewer = await requireBusinessViewer(ctx);
+    const leads = await ctx.db
+      .query("clients")
+      .withIndex("by_business", (q) => q.eq("businessId", viewer.businessId))
+      .collect();
+    return computePipelineMetrics(
+      leads.map((lead) => ({
+        stage: lead.stage,
+        estimatedValueCents: lead.estimatedValueCents,
+        probabilityPct: lead.probability ?? null,
+        createdAt: lead.createdAt,
+        closedAtMs: lead.closedAtMs ?? null,
+      })),
+      Date.now(),
+    );
   },
 });
 
@@ -119,7 +181,7 @@ export const convertToClient = mutation({
     const row = await ctx.db.get(args.leadId);
     assertBusinessOwns(row, viewer.businessId);
     if (row.isClient) throw new ConvexError("Already converted to a client.");
-    if (row.stage !== "Won")
+    if (canonicalStage(row.stage) !== "Won")
       throw new ConvexError("Only Won opportunities can be converted to clients.");
 
     const contractId = await ctx.db.insert("contracts", {

@@ -311,6 +311,12 @@ const schema = defineSchema(
       notes: v.optional(v.string()),
       activityLog: v.optional(v.array(v.string())), // timestamped history entries
       convertedClientId: v.optional(v.id("clients")), // when converted from a lead
+      // Phase 4 — pipeline additions (all optional; schemaValidation is off so
+      // pre-existing rows remain valid).
+      location: v.optional(v.string()),
+      probability: v.optional(v.number()), // 0..100, else stage default
+      closedAtMs: v.optional(v.number()), // set when Won/Lost
+      assignedOwner: v.optional(v.id("users")),
       archived: v.boolean(),
       createdBy: v.id("users"),
       createdAt: v.number(),
@@ -558,6 +564,44 @@ const schema = defineSchema(
       endDate: v.number(),
       visionTargets: v.optional(v.string()), // JSON; kept separate from actuals
     }).index("by_household_key", ["householdId", "key"]),
+
+    // ---------------------------------------------------------------
+    // Phase 4 Sprint 1 — CEO Command Center & lead pipeline.
+    // Activity rows are execution goals, NOT financial transactions.
+    // ---------------------------------------------------------------
+
+    // GHub service catalogue (drives proposal item prefill).
+    services: defineTable({
+      businessId: v.id("businesses"),
+      name: v.string(),
+      description: v.optional(v.string()),
+      priceMinCents: v.number(),
+      priceMaxCents: v.number(),
+      active: v.boolean(),
+      createdBy: v.id("users"),
+      createdAt: v.number(),
+    }).index("by_business", ["businessId"]),
+
+    // Weekly CEO activity counts (lead generation goals, not money).
+    ceoActivities: defineTable({
+      businessId: v.id("businesses"),
+      kind: v.string(), // ActivityKind
+      weekStartMs: v.number(), // Monday 00:00 UTC bucket
+      count: v.number(), // positive integer
+      createdBy: v.id("users"),
+      createdAt: v.number(),
+    })
+      .index("by_business_week", ["businessId", "weekStartMs"])
+      .index("by_business", ["businessId"]),
+
+    // Editable weekly activity targets, per business.
+    activityTargets: defineTable({
+      businessId: v.id("businesses"),
+      kind: v.string(), // ActivityKind
+      targetPerWeek: v.number(), // non-negative integer
+      updatedBy: v.id("users"),
+      updatedAt: v.number(),
+    }).index("by_business", ["businessId"]),
   },
   {
     schemaValidation: false,
