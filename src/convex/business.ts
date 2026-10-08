@@ -215,23 +215,31 @@ export const overview = query({
     const ytdLedger = ledger.filter((row) => row.date >= ytdStart);
 
     // ---- Revenue & expense distinctions (accrual accounting model) ----
-    // invoicedRevenue : non-draft invoices issued in the period (accrual
-    //                   event: service billed).
-    // cashCollected   : invoice payments received + un-invoiced cash revenue
-    //                   recorded in the ledger (cash event).
-    // earnedRevenue   : accrued by delivery — documented Phase-1 basis: a
-    //                   non-draft invoice is earned at issue (delivery
-    //                   tracking arrives in a later phase). Never the max
-    //                   of the two sums.
+    // billedRevenue    : non-draft invoices issued (an accrual event, NOT
+    //                    recognition on its own).
+    // cashCollected    : invoice payments received (cash event).
+    // recognizedRevenue: PROVISIONAL — equals billed until delivery tracking
+    //                    exists; clearly labelled, never used for taxes.
+    // customerPrepayments: cash received before any invoice (a liability,
+    //                    never revenue).
     const invoicedRevenueCents = invoices
       .filter((i) => i.status !== "draft")
       .reduce((s, i) => s + i.amountCents, 0);
     const cashFromInvoicesCents = invoices.reduce((s, i) => s + i.paidCents, 0);
+    const customerPrepaymentsCents = ytdLedger
+      .filter((row) => row.direction === "in" && row.category === "Customer Prepayment")
+      .reduce((s, row) => s + row.amount, 0);
     const otherCashRevenueCents = ytdLedger
-      .filter((row) => row.direction === "in" && !row.linkedInvoiceId)
+      .filter(
+        (row) =>
+          row.direction === "in" &&
+          !row.linkedInvoiceId &&
+          row.category !== "Customer Prepayment",
+      )
       .reduce((s, row) => s + row.amount, 0);
 
-    const earnedRevenueCents = invoicedRevenueCents; // documented accrual basis
+    // Backward-compatible aliases kept for existing UI:
+    const earnedRevenueCents = invoicedRevenueCents; // provisional recognition
     const revenueYtd = earnedRevenueCents;
     const cashCollected = cashFromInvoicesCents + otherCashRevenueCents;
     const opex = operatingExpensesCents(
@@ -291,22 +299,24 @@ export const overview = query({
       operatingExpenses: opex,
       netOperatingProfit,
       availableCash,
-      receivables,
       mrrCents,
       activeRetainerClients,
       runwayMonths: runway,
       invoicedRevenueYtd: invoicedRevenueCents,
+      billedRevenueYtd: invoicedRevenueCents,
       earnedRevenueYtd: earnedRevenueCents,
-      unearnedRevenueYtd: invoicedRevenueCents - cashFromInvoicesCents > 0
-        ? invoicedRevenueCents - cashFromInvoicesCents
-        : 0, // billed but not yet collected (overlaps receivables)
+      recognizedRevenueYtd: earnedRevenueCents, // PROVISIONAL (see assumptions)
+      customerPrepaymentsCents,
+      // Receivables: unpaid issued invoices (the old "unearned" label was
+      // misleading — this is an accounts-receivable metric).
+      receivables,
       salaries,
       openLeadCount: openLeads.length,
       assumptions: {
         runway:
           "Runway = available business cash / average monthly operating expenses over YTD.",
         earned:
-          "Earned revenue = max(invoiced, cash collected) — Phase 1 approximation.",
+          "PROVISIONAL: recognized revenue currently equals billed (issued) invoices because delivery tracking is not implemented. Billed, collected, receivables and customer prepayments are reported separately.",
       },
     };
   },

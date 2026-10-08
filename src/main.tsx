@@ -35,6 +35,10 @@ const InvestmentsTransactionsPage = lazy(() => import("./pages/InvestmentsTransa
 const AssetsPage = lazy(() => import("./pages/AssetsPage.tsx"));
 const AllocationsPage = lazy(() => import("./pages/AllocationsPage.tsx"));
 const PerformancePage = lazy(() => import("./pages/PerformancePage.tsx"));
+const WealthDashboardPage = lazy(() => import("./pages/WealthDashboardPage.tsx"));
+const RoadmapsPage = lazy(() => import("./pages/RoadmapsPage.tsx"));
+const MilestonesPage = lazy(() => import("./pages/MilestonesPage.tsx"));
+const InsightsPage = lazy(() => import("./pages/InsightsPage.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
 // Simple loading fallback for route transitions
@@ -171,6 +175,10 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="/investments/assets" element={<AssetsPage />} />
                 <Route path="/investments/allocations" element={<AllocationsPage />} />
                 <Route path="/investments/performance" element={<PerformancePage />} />
+                <Route path="/wealth/dashboard" element={<WealthDashboardPage />} />
+                <Route path="/wealth/roadmaps" element={<RoadmapsPage />} />
+                <Route path="/wealth/milestones" element={<MilestonesPage />} />
+                <Route path="/wealth/insights" element={<InsightsPage />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
