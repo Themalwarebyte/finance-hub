@@ -95,3 +95,125 @@ requirements — including production browser verification — are satisfied).
 
 ---
 *Generated 2026-10-08. Prepared for the GHub Finance Platform Phase 4 release-readiness phase.*
+
+# Phase 4.1 — Real-World Verification (executed 2026-10-08)
+
+## Deployment repair — root cause and fix (DONE, verified)
+
+The `convex dev --once` failure ("Two output files share the same path but have
+different contents: out/<module>.js") was **not** a stale-cache problem. Root cause:
+stray compiled `.js` twins of every convex module (e.g. `src/convex/budgets.js` next
+to `budgets.ts`, produced at 15:40 by an outside transpile step, alongside root
+`vite.config.js` / `vly-toolbar-readonly.js`). The bundler then had two entry points
+per module mapping to the same output path with different contents.
+
+Fix (source-preserving, no generated code hand-edited):
+
+```
+rm -f src/convex/*.js src/convex/auth/emailOtp.js   # reproducible artifacts only
+bunx convex dev --once                              # PUSH_EXIT=0, functions ready
+npx tsc -b --noEmit                                 # TSC_EXIT=0
+```
+
+`src/convex/_generated/api.js` + `server.js` were preserved (required). Full suite:
+**76 pass / 0 fail** (71 unit + 5 new live integration).
+
+## Real backend execution (LIVE deployment, real authenticated sessions)
+
+New suite `src/integration/e2e-backend.test.ts` uses `ConvexHttpClient` + real
+Convex Auth sessions (anonymous provider) — the same API surface the browser uses:
+
+| # | Test (all PASS) | Evidence |
+|---|---|---|
+| 1 | Login works | Real anonymous session; `users.currentUser` returns the new user |
+| 2 | Two-user isolation | Two real sessions/workspaces; B cannot list A's account; B's cross-user `transactions.create` rejected; both queries scoped by membership |
+| 3 | Currency switch never mutates storage | 77,700 KES-cents + `currency:"KES"` unchanged across KES→USD→KES switches |
+| 4 | Rate integrity guards | Valid 129.5 stored+read; −5, 0, same-currency all rejected (new guards); USD→EUR missing → `null` → UI "n/a" |
+| 5 | Conversion reconciles | 100 USD → 1,295,000 KES-cents → round-trip to 10,000 ± 1 USD-cents |
+
+CLI-driven checks against the live deployment also confirmed: rate read-back (129.5),
+reverse rate stored (0.007722), preference persistence (`"KES"`), and stored balances
+byte-identical before/after display switches (via `convex data accounts`).
+
+## Bug found and fixed (verified live)
+
+`currency:setExchangeRate` accepted **negative rates** and identical from/to codes.
+Fixed in `src/convex/currency.ts` (positivity + finiteness + 3-letter distinct-currency
+checks), pushed (PUSH_EXIT=0), and verified live: −5 rejected, USD→USD rejected,
+valid KES→USD accepted. Added to the integration suite so it stays fixed.
+
+## Backup test (real, verified)
+
+```
+bunx convex export --path /tmp/ghub-backup-test.zip   # EXPORT_EXIT=0 (25,218 bytes)
+```
+
+Zip integrity verified programmatically: **80 files, 39 tables**, real counts
+(users: 17, households: 11, memberships: 11, authSessions: 16, currencyRates: 5,
+accounts: 2, transactions: 1 …), and the labeled Phase 4.1 test rows
+(`TEST-ONLY synthetic staging rate`, `E2E-ISOLATION-TEST`) are present inside the
+snapshot — proving the backup contains the real data just created.
+
+## Self-hosted staging deployment — INCOMPLETE (infrastructure restrictions)
+
+What was prepared and verified offline:
+
+- Official `convex-local-backend` (precompiled-2026-10-06-a3538c6, x86_64-linux)
+  downloaded; runs on this host via a newer-glibc loader
+  (`glibc-root/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 --library-path …`); `--help`,
+  `keygen admin-key` both executed successfully. Instance secret + admin key generated.
+
+What blocked actual startup:
+
+1. **Docker is not installed** (the documented Compose path is unavailable).
+2. **This environment prohibits starting server processes** (platform guard), so the
+   backend/static server could not be launched and kept running for testing.
+3. **Network isolation:** no port on the host is reachable from the agent shell
+   (managed sessions run in a separate namespace), so even the platform's own running
+   preview at `:5173` answers `HTTP 000` from here.
+4. **Cloud isolated restore target:** `convex deployment create` is refused for this
+   CLI's auth scope (deploy key: "Creating a deployment isn't supported with a deploy
+   key"), so importing the snapshot into an isolated second cloud deployment was not
+   possible either. Import into the LIVE deployment was deliberately **not** attempted
+   (would overwrite real data — violates the safety requirements).
+
+Restore procedure itself is confirmed available (`convex import snapshot.zip`); only
+the isolated target is missing. **Backup-restore: export VERIFIED, restore-to-isolated
+environment INCOMPLETE.**
+
+## Real-browser E2E — INCOMPLETE (infrastructure restrictions)
+
+- No Chromium/Firefox binary on the host; `npx playwright` (v1.64.0) is installable but
+  there is no reachable app URL to point it at (see network isolation above), and
+  serving the app from the agent shell is prohibited.
+- What was executed instead is **stronger than component rendering**: the 5 live
+  integration tests above exercise real authenticated HTTP requests against the real
+  deployment — the exact requests the browser would make — covering auth, isolation,
+  CRUD guards, and currency integrity end-to-end.
+- Mobile layouts / visual screenshots / true session-expiry UI flows: **not executed**.
+
+## Resilience evidence (real, indirect)
+
+Data persisted across many independent backend pushes/restarts during this session:
+the test rate written at ~17:30 was still readable at 17:44+ after code pushes
+(`PUSH_EXIT=0` cycles), and pre-existing dev data (account `One`, openingBalance
+50000) remained intact throughout — genuine persistence across backend process
+lifecycles. Deliberate restart/recovery choreography could not be run (no server
+control).
+
+## Phase 4.1 readiness classification
+
+- TypeScript: **PASS** (EXIT 0). Tests: **76 pass / 0 fail** (71 unit + 5 live).
+- Convex cloud deployment: **HEALTHY** (push restored; bug fix verified live).
+- Currency integrity: **VERIFIED** live (storage immutability, guards, round-trip).
+- Two-user isolation: **VERIFIED** live (real sessions, cross-access rejected).
+- Backup: **EXPORT VERIFIED**; restore-to-isolated: **INCOMPLETE** (no permitted
+  isolated target).
+- Self-hosted staging: **INCOMPLETE** (no Docker, server-start prohibition, network
+  isolation — all documented above with exact commands attempted).
+- Real-browser E2E: **INCOMPLETE** (no browser, no reachable app URL).
+
+**Classification: STAGING-READY (verified by live API-level E2E); NOT production-ready.**
+The specific blockers are environmental (Docker/server/network/browser), not
+application defects; the application itself passed every check that this environment
+permits to execute.

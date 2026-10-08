@@ -47,12 +47,25 @@ export const setExchangeRate = mutation({
   handler: async (ctx, args) => {
     const viewer = await getAuthUserId(ctx);
     if (viewer === null) throw new Error("Not authenticated");
+    // Currency-integrity guards: rates must be positive, finite, and between
+    // two distinct supported codes. Never accept a fabricated/invalid rate.
+    if (!Number.isFinite(args.exchangeRate) || args.exchangeRate <= 0) {
+      throw new Error("Exchange rate must be a positive finite number.");
+    }
+    const from = args.fromCurrency.trim().toUpperCase();
+    const to = args.toCurrency.trim().toUpperCase();
+    if (from.length !== 3 || to.length !== 3) {
+      throw new Error("Currency codes must be 3 letters (e.g. KES, USD).");
+    }
+    if (from === to) {
+      throw new Error("Exchange rate requires two different currencies.");
+    }
     const existing = await ctx.db
       .query("currencyRates")
       .withIndex("by_from", (q) =>
         q
-          .eq("fromCurrency", args.fromCurrency)
-          .eq("toCurrency", args.toCurrency)
+          .eq("fromCurrency", from)
+          .eq("toCurrency", to)
           .eq("effectiveDate", args.effectiveDate),
       )
       .first();
@@ -63,8 +76,8 @@ export const setExchangeRate = mutation({
       });
     } else {
       await ctx.db.insert("currencyRates", {
-        fromCurrency: args.fromCurrency,
-        toCurrency: args.toCurrency,
+        fromCurrency: from,
+        toCurrency: to,
         exchangeRate: args.exchangeRate,
         effectiveDate: args.effectiveDate,
         source: args.source,
