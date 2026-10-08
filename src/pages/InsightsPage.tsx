@@ -1,6 +1,7 @@
 import { BizPageHeader } from "@/components/finance/BizParts";
 import { api } from "@/convex/_generated/api";
-import { deriveInsights, type Insight } from "@/lib/forecast";
+import { deriveInsights, milestoneProgress, type Insight } from "@/lib/forecast";
+import { ROADMAP_END, ROADMAP_START } from "@/lib/business";
 import { useQuery } from "convex/react";
 import { useMemo } from "react";
 
@@ -15,9 +16,18 @@ export default function InsightsPage() {
   const business = useQuery(api.business.overview, {});
   const overview = useQuery(api.finance.dashboard, {});
   const invoices = useQuery(api.businessSales.listInvoices, {});
+  const roadmap = useQuery(api.business.roadmapProgress, {});
+  const allocations = useQuery(api.invest.listAllocations, {});
 
   const insights = useMemo(() => {
-    if (portfolio === undefined || business === undefined || overview === undefined || invoices === undefined)
+    if (
+      portfolio === undefined ||
+      business === undefined ||
+      overview === undefined ||
+      invoices === undefined ||
+      roadmap === undefined ||
+      allocations === undefined
+    )
       return null;
 
     if (overview === null) return [];
@@ -25,6 +35,31 @@ export default function InsightsPage() {
     const portfolioTotal = portfolio.totals.marketValueCents;
     const monthlyIncome = overview.cards.income;
     const monthlyExpenses = overview.cards.expenses;
+
+    // Missed targets: count roadmap milestones currently behind pace, from
+    // real milestone rows and recorded actuals.
+    const now = Date.now();
+    const elapsed = Math.max(0, now - ROADMAP_START);
+    const total = ROADMAP_END - ROADMAP_START;
+    const missedTargetCount = (roadmap ?? []).filter((row: { targetCents: number; actualCents: number }) =>
+      milestoneProgress(row.actualCents, row.targetCents, elapsed, total).status === "behind",
+    ).length;
+
+    // Allocation drift: largest gap between an active cycle's actual
+    // portfolio weight and its target percentage.
+    const activeAllocs = allocations.filter(
+      (a: { active: boolean }) => a.active,
+    ) as { cycle: string; securityId: string; pct: number }[];
+    const weights = new Map<string, number>();
+    for (const row of portfolio.rows) {
+      const w = portfolioTotal > 0 ? ((row.marketValueCents ?? 0) / portfolioTotal) * 100 : 0;
+      weights.set(row._id, w);
+    }
+    let allocationDriftPct = 0;
+    for (const alloc of activeAllocs) {
+      const actual = weights.get(alloc.securityId) ?? 0;
+      allocationDriftPct = Math.max(allocationDriftPct, Math.abs(actual - alloc.pct));
+    }
 
     return deriveInsights({
       portfolio: portfolio.rows.map((row) => ({
@@ -38,10 +73,10 @@ export default function InsightsPage() {
       overdueInvoiceCount: overdue,
       monthlyRevenueNow: business.revenueYtd,
       monthlyRevenuePrev: business.revenueYtd, // month-over-month trend arrives with history
-      missedTargetCount: 0, // wired from milestone statuses below if any
-      allocationDriftPct: 0,
+      missedTargetCount,
+      allocationDriftPct,
     });
-  }, [portfolio, business, overview, invoices]);
+  }, [portfolio, business, overview, invoices, roadmap, allocations]);
 
   return (
     <div className="flex flex-col gap-6">

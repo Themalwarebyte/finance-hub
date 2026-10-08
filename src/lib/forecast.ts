@@ -401,6 +401,7 @@ export function milestoneProgress(
   targetCents: number,
   elapsedMs: number,
   totalMs: number,
+  windowStartMs: number = 0,
 ): {
   pct: number;
   remainingCents: number;
@@ -408,6 +409,18 @@ export function milestoneProgress(
   expectedPct: number;
   paceRatio: number | null;
   status: MilestoneStatus;
+  /**
+   * Estimated completion timestamp (window start + extrapolated duration),
+   * when `windowStartMs` is supplied. Null while no progress has been
+   * recorded (pct = 0) or the target is already met. Documented assumption:
+   * linear extrapolation of realized progress — no speculative curves.
+   */
+  estimatedCompletionMs: number | null;
+  /**
+   * True when the linear extrapolation extends beyond the roadmap window
+   * (i.e. the milestone will finish late at the current pace).
+   */
+  estimatedOverrun: boolean;
 } {
   const pct =
     targetCents > 0
@@ -425,7 +438,28 @@ export function milestoneProgress(
     else if (paceRatio < 0.9) status = "behind";
   }
 
-  return { pct, remainingCents, timeRemainingMs, expectedPct, paceRatio, status };
+  // Linear extrapolation: total duration = elapsed / (fraction completed).
+  // pct is clamped to 0..100, so pct === 100 means "done at now".
+  let estimatedCompletionMs: number | null = null;
+  let estimatedOverrun = false;
+  if (pct >= 100) {
+    estimatedCompletionMs = windowStartMs + elapsedMs; // finished now
+  } else if (pct > 0 && elapsedMs > 0) {
+    const totalDuration = elapsedMs * (100 / pct);
+    estimatedOverrun = totalDuration > totalMs;
+    estimatedCompletionMs = Math.round(windowStartMs + totalDuration);
+  }
+
+  return {
+    pct,
+    remainingCents,
+    timeRemainingMs,
+    expectedPct,
+    paceRatio,
+    status,
+    estimatedCompletionMs,
+    estimatedOverrun,
+  };
 }
 
 // ---------------------------------------------------------------------------

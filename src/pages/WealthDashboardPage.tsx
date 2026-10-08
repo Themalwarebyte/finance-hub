@@ -1,5 +1,7 @@
 import { BizPageHeader, BizStatCard } from "@/components/finance/BizParts";
 import { api } from "@/convex/_generated/api";
+import { milestoneProgress } from "@/lib/forecast";
+import { ROADMAP_END, ROADMAP_START } from "@/lib/business";
 import { formatMoney } from "@/lib/format";
 import { useQuery } from "convex/react";
 import { Link } from "react-router";
@@ -9,18 +11,29 @@ export default function WealthDashboardPage() {
   const dashboard = useQuery(api.finance.dashboard, {});
   const business = useQuery(api.business.overview, {});
   const portfolio = useQuery(api.invest.portfolio, {});
+  const roadmap = useQuery(api.business.roadmapProgress, {});
 
-  if (overview === undefined || dashboard === undefined || business === undefined || portfolio === undefined) {
+  if (
+    overview === undefined ||
+    dashboard === undefined ||
+    business === undefined ||
+    portfolio === undefined ||
+    roadmap === undefined
+  ) {
     return <div className="text-muted-foreground text-sm">Loading consolidated wealth…</div>;
   }
 
   // --- Personal (household actuals) ---
   const personalNetWorth = overview ? overview.assets - overview.liabilities : null;
-  const personalLiquid = overview ? overview.assets - overview.investments.investedBalance : null;
+  const totalLiabilities = overview ? overview.liabilities : null;
+  const cashAndSavings = dashboard ? dashboard.cards.cash + dashboard.cards.bank : null;
 
   // --- Business (GHub actuals) ---
-  const businessNetAssets = business ? business.availableCash - business.receivables * 0 : null;
-  const businessEquity = business ? business.availableCash + business.receivables - business.operatingExpenses * 0 : null;
+  // Business equity = available cash + receivables (assets) minus customer
+  // prepayments held (a liability owed to customers). Counted once.
+  const businessEquity = business
+    ? business.availableCash + business.receivables - business.customerPrepaymentsCents
+    : null;
 
   // --- Portfolio (investments actuals) ---
   const portfolioValue = portfolio.totals.marketValueCents;
@@ -30,6 +43,26 @@ export default function WealthDashboardPage() {
   // business); nothing is double-counted across the three domains.
   const consolidated =
     (personalNetWorth ?? 0) + portfolioValue + (businessEquity ?? 0);
+
+  // --- Roadmap progress (active roadmap = Year-1 GHub targets) ---
+  const now = Date.now();
+  const elapsed = Math.max(0, now - ROADMAP_START);
+  const total = ROADMAP_END - ROADMAP_START;
+  const roadmapRows = (roadmap ?? []).map((row: { _id: string; label: string; targetCents: number; actualCents: number }) => ({
+    ...row,
+    progress: milestoneProgress(
+      row.actualCents,
+      row.targetCents,
+      elapsed,
+      total,
+      ROADMAP_START,
+    ),
+  }));
+  const overallPct =
+    roadmapRows.length > 0
+      ? roadmapRows.reduce((s: number, r: { progress: { pct: number } }) => s + r.progress.pct, 0) /
+        roadmapRows.length
+      : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -46,7 +79,7 @@ export default function WealthDashboardPage() {
           {formatMoney(consolidated)}
         </p>
         <p className="text-primary-foreground/70 mt-1 text-xs">
-          Personal net worth + investment portfolio + business equity (cash + receivables)
+          Personal net worth + investment portfolio + business equity (cash + receivables − prepayments)
         </p>
       </div>
 
@@ -55,6 +88,16 @@ export default function WealthDashboardPage() {
           label="Personal net worth"
           value={personalNetWorth === null ? "—" : formatMoney(personalNetWorth)}
           hint="Household accounts, from the Finance Hub"
+        />
+        <BizStatCard
+          label="Total liabilities"
+          value={totalLiabilities === null ? "—" : formatMoney(totalLiabilities)}
+          hint="Credit cards, loans, mortgages tracked in the household"
+        />
+        <BizStatCard
+          label="Cash & emergency savings"
+          value={cashAndSavings === null ? "—" : formatMoney(cashAndSavings)}
+          hint="Cash, mobile money and bank balances"
         />
         <BizStatCard
           label="Investment portfolio"
@@ -68,11 +111,15 @@ export default function WealthDashboardPage() {
         <BizStatCard
           label="Business cash & receivables"
           value={businessEquity === null ? "—" : formatMoney(businessEquity)}
-          hint={`Cash ${business ? formatMoney(business.availableCash) : "—"} + receivables ${business ? formatMoney(business.receivables) : "—"}`}
+          hint={`Cash ${business ? formatMoney(business.availableCash) : "—"} + receivables ${business ? formatMoney(business.receivables) : "—"} − prepayments ${business ? formatMoney(business.customerPrepaymentsCents) : "—"}`}
         />
         <BizStatCard
           label="Business liabilities (owed to others)"
-          value={business && business.customerPrepaymentsCents > 0 ? formatMoney(business.customerPrepaymentsCents) : formatMoney(0)}
+          value={
+            business && business.customerPrepaymentsCents > 0
+              ? formatMoney(business.customerPrepaymentsCents)
+              : formatMoney(0)
+          }
           hint="Customer prepayments held (a liability, never revenue)"
         />
         <BizStatCard
@@ -119,14 +166,62 @@ export default function WealthDashboardPage() {
         />
       </div>
 
+      <section className="surface-card rounded-xl border p-4">
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 className="text-sm font-semibold">Active roadmap progress</h2>
+          {overallPct !== null && (
+            <span className="text-sm font-semibold tabular-nums">
+              {overallPct.toFixed(0)}% average
+            </span>
+          )}
+        </div>
+        {roadmapRows.length === 0 ? (
+          <p className="text-muted-foreground mt-2 text-xs">
+            No roadmap milestones yet — open the GHub roadmap page to seed Year-1 targets.
+          </p>
+        ) : (
+          <ul className="mt-3 flex flex-col gap-2.5">
+            {roadmapRows.map(
+              (row: {
+                _id: string;
+                label: string;
+                targetCents: number;
+                actualCents: number;
+                progress: { pct: number; status: string };
+              }) => (
+                <li key={row._id} className="flex flex-col gap-1">
+                  <div className="flex items-baseline justify-between gap-2 text-xs">
+                    <span className="font-medium">{row.label}</span>
+                    <span className="text-muted-foreground tabular-nums">
+                      {formatMoney(row.actualCents)} / {formatMoney(row.targetCents)} ·{" "}
+                      {row.progress.pct.toFixed(0)}% · {row.progress.status.replace("_", " ")}
+                    </span>
+                  </div>
+                  <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full">
+                    <div
+                      className="bg-primary h-full rounded-full transition-[width]"
+                      style={{ width: `${row.progress.pct}%` }}
+                    />
+                  </div>
+                </li>
+              ),
+            )}
+          </ul>
+        )}
+        <p className="text-muted-foreground mt-3 text-xs">
+          Full detail with pace and estimated completion lives on the{" "}
+          <Link to="/wealth/milestones" className="underline">
+            Milestones
+          </Link>{" "}
+          page.
+        </p>
+      </section>
+
       <p className="text-muted-foreground text-xs">
         Methodology: business exit valuations are never treated as realized liquid wealth; the
         projected/hypothetical acquisition stays inside the 33-year plan page only. Receivables are
-        counted once, as business assets. Roadmap progress lives on the{" "}
-        <Link to="/wealth/milestones" className="underline">
-          Milestones
-        </Link>{" "}
-        page.
+        counted once, as business assets; customer prepayments are counted as liabilities, never
+        revenue.
       </p>
     </div>
   );

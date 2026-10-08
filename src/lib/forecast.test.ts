@@ -245,6 +245,27 @@ describe("milestones", () => {
     expect(result.timeRemainingMs).toBe(75);
     expect(result.pct).toBe(20);
   });
+
+  test("estimated completion: linear extrapolation and overrun flag", () => {
+    const WINDOW_START = 1_000_000;
+    // 20% after 25 of 100 elapsed units -> done at start + 125 (overrun).
+    const behind = milestoneProgress(200, 1000, 25, 100, WINDOW_START);
+    expect(behind.estimatedOverrun).toBe(true);
+    expect(behind.estimatedCompletionMs).toBe(WINDOW_START + 125);
+
+    // 60% after 25 of 100 -> done at start + ~41.67 (ahead of window).
+    const ahead = milestoneProgress(600, 1000, 25, 100, WINDOW_START);
+    expect(ahead.estimatedOverrun).toBe(false);
+    expect(ahead.estimatedCompletionMs).toBeCloseTo(WINDOW_START + 41.667, 0);
+
+    // Completed milestones report completion at now.
+    const done = milestoneProgress(1000, 1000, 25, 100, WINDOW_START);
+    expect(done.estimatedCompletionMs).toBe(WINDOW_START + 25);
+    expect(done.estimatedOverrun).toBe(false);
+
+    // No progress yet -> no estimate.
+    expect(milestoneProgress(0, 1000, 25, 100, WINDOW_START).estimatedCompletionMs).toBeNull();
+  });
 });
 
 describe("insights rules", () => {
