@@ -258,15 +258,199 @@ const schema = defineSchema(
       createdAt: v.number(),
     })
       .index("by_household_date", ["householdId", "date"])
-      .index("by_household", ["householdId"]),
-
-    // Workspace-specific custom categories (built-ins live in code).
+      .index("by_household", ["householdId"]),    // Workspace-specific custom categories (built-ins live in code).
     categories: defineTable({
       householdId: v.id("households"),
       name: v.string(),
       kind: v.union(v.literal("income"), v.literal("expense")),
       createdAt: v.number(),
     }).index("by_household", ["householdId"]),
+
+    // ---------------------------------------------------------------
+    // GHub Technology Solutions — separately permissioned business
+    // workspace. Additive-only: no existing table or index is changed.
+    // Money fields remain integer cents.
+    // ---------------------------------------------------------------
+
+    // The business entity itself. Created on demand; never shares the
+    // household's membership list.
+    businesses: defineTable({
+      name: v.string(), // "GHub Technology Solutions"
+      currency: v.string(), // "KES"
+      createdBy: v.id("users"),
+      createdAt: v.number(),
+    }).index("by_created_by", ["createdBy"]),
+
+    // Explicit business membership. Household members get nothing here
+    // unless they are separately added.
+    businessMembers: defineTable({
+      businessId: v.id("businesses"),
+      userId: v.id("users"),
+      role: memberRoleValidator, // owner | member
+      joinedAt: v.number(),
+    })
+      .index("by_user", ["userId"])
+      .index("by_business", ["businessId"]),
+
+    // Sales pipeline. A lead starts as a lead; conversion moves it to a
+    // client row instead of duplicating records.
+    clients: defineTable({
+      businessId: v.id("businesses"),
+      isClient: v.boolean(), // false = still a lead
+      businessName: v.string(),
+      contactPerson: v.string(),
+      contactEmail: v.optional(v.string()),
+      contactPhone: v.optional(v.string()),
+      category: v.string(), // business category
+      source: v.string(), // lead source
+      serviceRequired: v.string(),
+      estimatedValueCents: v.number(), // estimated contract value
+      stage: v.string(), // SalesStage
+      lastContactDate: v.optional(v.number()),
+      nextFollowUp: v.optional(v.number()),
+      notes: v.optional(v.string()),
+      activityLog: v.optional(v.array(v.string())), // timestamped history entries
+      convertedClientId: v.optional(v.id("clients")), // when converted from a lead
+      archived: v.boolean(),
+      createdBy: v.id("users"),
+      createdAt: v.number(),
+    })
+      .index("by_business", ["businessId"])
+      .index("by_business_stage", ["businessId", "stage"]),
+
+    // Quotations with line items.
+    proposals: defineTable({
+      businessId: v.id("businesses"),
+      clientId: v.id("clients"),
+      title: v.string(),
+      items: v.array(
+        v.object({
+          description: v.string(),
+          qty: v.number(),
+          unitPriceCents: v.number(),
+        }),
+      ),
+      totalCents: v.number(),
+      status: v.union(
+        v.literal("draft"),
+        v.literal("sent"),
+        v.literal("accepted"),
+        v.literal("rejected"),
+      ),
+      sentAt: v.optional(v.number()),
+      decidedAt: v.optional(v.number()),
+      createdBy: v.id("users"),
+      createdAt: v.number(),
+    }).index("by_business", ["businessId"]),
+
+    // Service contracts and retainer agreements.
+    contracts: defineTable({
+      businessId: v.id("businesses"),
+      clientId: v.id("clients"),
+      proposalId: v.optional(v.id("proposals")),
+      title: v.string(),
+      startDate: v.number(),
+      endDate: v.optional(v.number()),
+      billingFrequency: frequencyValidator, // weekly..monthly
+      billingAmountCents: v.number(),
+      status: v.union(
+        v.literal("active"),
+        v.literal("paused"),
+        v.literal("ended"),
+      ),
+      // Retainers feed MRR; one-off service contracts don't.
+      isRetainer: v.boolean(),
+      createdBy: v.id("users"),
+      createdAt: v.number(),
+    }).index("by_business", ["businessId"]),
+
+    // Invoices with eTIMS reference storage (manual, integration-neutral).
+    invoices: defineTable({
+      businessId: v.id("businesses"),
+      clientId: v.id("clients"),
+      contractId: v.optional(v.id("contracts")),
+      number: v.string(), // human invoice number
+      amountCents: v.number(),
+      issueDate: v.number(),
+      dueDate: v.number(),
+      paidCents: v.number(), // sum of allocations — maintained server-side
+      status: v.union(
+        v.literal("draft"),
+        v.literal("issued"),
+        v.literal("partially_paid"),
+        v.literal("paid"),
+        v.literal("overdue"),
+      ),
+      etimsRef: v.optional(v.string()), // manually stored KRA eTIMS reference
+      etimsStatus: v.optional(v.union(
+        v.literal("none"),
+        v.literal("submitted"),
+        v.literal("acknowledged"),
+      )),
+      attachments: v.optional(v.array(v.string())), // storage keys / links
+      notes: v.optional(v.string()),
+      createdBy: v.id("users"),
+      createdAt: v.number(),
+    })
+      .index("by_business", ["businessId"])
+      .index("by_business_status", ["businessId", "status"]),
+
+    // Payment allocations against invoices.
+    invoicePayments: defineTable({
+      businessId: v.id("businesses"),
+      invoiceId: v.id("invoices"),
+      amountCents: v.number(), // positive cents applied to the invoice
+      method: v.string(), // M-PESA, bank transfer, cash…
+      reference: v.optional(v.string()),
+      receivedAt: v.number(),
+      createdBy: v.id("users"),
+      createdAt: v.number(),
+    }).index("by_invoice", ["invoiceId"]),
+
+    // The business P&L ledger: revenue, expenses, salaries, drawings,
+    // capital contributions, transfers. All amounts in integer cents.
+    businessLedger: defineTable({
+      businessId: v.id("businesses"),
+      direction: directionValidator, // in / out / transfer
+      amount: v.number(), // positive cents
+      category: v.string(),
+      description: v.string(),
+      date: v.number(),
+      linkedInvoiceId: v.optional(v.id("invoices")), // cash received against an invoice
+      linkedGoalId: v.optional(v.id("goals")), // money-market-fund tracking
+      transferTarget: v.optional(v.string()), // "household" marker for owner moves
+      createdBy: v.id("users"),
+      createdAt: v.number(),
+    }).index("by_business", ["businessId"]),
+
+    // Year-1 roadmap milestones. Targets are user-editable values, never
+    // derived from financial data.
+    milestones: defineTable({
+      businessId: v.id("businesses"),
+      label: v.string(),
+      targetCents: v.number(),
+      quarter: v.optional(v.number()), // 1..4 for revenue targets
+      kind: v.union(
+        v.literal("revenue"),
+        v.literal("mmf_contributions"),
+        v.literal("net_worth"),
+        v.literal("mrr"),
+      ),
+      startDate: v.number(),
+      endDate: v.number(),
+      createdBy: v.id("users"),
+      createdAt: v.number(),
+    }).index("by_business", ["businessId"]),
+
+    // Tiny per-user preference store for the business view switcher.
+    userSettings: defineTable({
+      userId: v.id("users"),
+      bizView: v.optional(v.union(
+        v.literal("personal"),
+        v.literal("ghub"),
+        v.literal("consolidated"),
+      )),
+    }).index("by_user", ["userId"]),
   },
   {
     schemaValidation: false,

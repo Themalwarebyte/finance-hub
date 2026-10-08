@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import {
   ArrowRightLeft,
+  Building2,
   CalendarClock,
   CreditCard,
   FileText,
@@ -91,6 +92,17 @@ const NAV_GROUPS: NavGroup[] = [
       { to: "/reports", label: "Reports", icon: Receipt, soon: true },
       { to: "/tax", label: "Tax centre", icon: FileText, soon: true },
       { to: "/documents", label: "Documents", icon: FileText, soon: true },
+    ],
+  },
+  {
+    label: "GHub Business",
+    items: [
+      { to: "/ghub/dashboard", label: "GHub dashboard", icon: Building2 },
+      { to: "/ghub/clients", label: "Clients & leads", icon: Users },
+      { to: "/ghub/contracts", label: "Proposals & contracts", icon: FileText },
+      { to: "/ghub/invoices", label: "Invoices & payments", icon: Receipt },
+      { to: "/ghub/financials", label: "Business financials", icon: Landmark },
+      { to: "/ghub/roadmap", label: "Business roadmap", icon: Target },
     ],
   },
 ];
