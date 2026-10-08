@@ -273,6 +273,10 @@ export function AppShell() {
     code: displayCurrency ?? "",
   });
   const rateCentsPerUsd = countryRate?.rateCentsPerUsd ?? null;
+  const setDisplayCurrency = useMutation(api.currency.setDisplayCurrency);
+  const updateDisplayCurrency = (next: string) => {
+    void setDisplayCurrency({ country: next });
+  };
 
   const [recordOpen, setRecordOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
@@ -446,7 +450,7 @@ export function AppShell() {
                     value={displayCurrency ?? "USD"}
                     onChange={(e) => {
                       const next = e.target.value;
-                      void api.currency.setDisplayCurrency({ country: next });
+                      void updateDisplayCurrency(next);
                     }}
                     className="bg-transparent text-sm font-medium text-foreground outline-none focus:ring-0"
                     aria-label="Display currency"

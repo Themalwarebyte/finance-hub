@@ -165,8 +165,12 @@ function StatCard({
 
 export default function Dashboard() {
   const [period, setPeriod] = useState("this_month");
+  const displayCurrency = useQuery(api.currency.getDisplayCurrency, {});
   const data = useQuery(api.finance.dashboard, { period });
-
+  const countryRate = useQuery(api.currency.getCountry, {
+    code: displayCurrency ?? "",
+  });
+  const rateCentsPerUsd = countryRate?.rateCentsPerUsd ?? null;
   if (data === undefined) {
     return (
       <div className="flex flex-col gap-6">
