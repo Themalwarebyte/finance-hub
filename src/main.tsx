@@ -29,6 +29,12 @@ const ContractsPage = lazy(() => import("./pages/ContractsPage.tsx"));
 const InvoicesPage = lazy(() => import("./pages/InvoicesPage.tsx"));
 const BusinessFinancialsPage = lazy(() => import("./pages/BusinessFinancialsPage.tsx"));
 const RoadmapPage = lazy(() => import("./pages/RoadmapPage.tsx"));
+const InvestmentsDashboardPage = lazy(() => import("./pages/InvestmentsDashboardPage.tsx"));
+const PortfolioPage = lazy(() => import("./pages/PortfolioPage.tsx"));
+const InvestmentsTransactionsPage = lazy(() => import("./pages/InvestmentsTransactionsPage.tsx"));
+const AssetsPage = lazy(() => import("./pages/AssetsPage.tsx"));
+const AllocationsPage = lazy(() => import("./pages/AllocationsPage.tsx"));
+const PerformancePage = lazy(() => import("./pages/PerformancePage.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
 // Simple loading fallback for route transitions
@@ -159,6 +165,12 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="/ghub/invoices" element={<InvoicesPage />} />
                 <Route path="/ghub/financials" element={<BusinessFinancialsPage />} />
                 <Route path="/ghub/roadmap" element={<RoadmapPage />} />
+                <Route path="/investments/dashboard" element={<InvestmentsDashboardPage />} />
+                <Route path="/investments/portfolio" element={<PortfolioPage />} />
+                <Route path="/investments/transactions" element={<InvestmentsTransactionsPage />} />
+                <Route path="/investments/assets" element={<AssetsPage />} />
+                <Route path="/investments/allocations" element={<AllocationsPage />} />
+                <Route path="/investments/performance" element={<PerformancePage />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>

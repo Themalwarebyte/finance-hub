@@ -105,6 +105,17 @@ const NAV_GROUPS: NavGroup[] = [
       { to: "/ghub/roadmap", label: "Business roadmap", icon: Target },
     ],
   },
+  {
+    label: "Investments",
+    items: [
+      { to: "/investments/dashboard", label: "Investments", icon: TrendingUp },
+      { to: "/investments/portfolio", label: "Portfolio", icon: Wallet },
+      { to: "/investments/transactions", label: "Transactions", icon: ArrowRightLeft },
+      { to: "/investments/assets", label: "Other assets", icon: Landmark },
+      { to: "/investments/allocations", label: "Allocations", icon: Target },
+      { to: "/investments/performance", label: "Performance", icon: LineChart },
+    ],
+  },
 ];
 
 const SIDEBAR_KEY = "financeHub.sidebarCollapsed";

@@ -214,7 +214,15 @@ export const overview = query({
     const ytdStart = yearStart(now);
     const ytdLedger = ledger.filter((row) => row.date >= ytdStart);
 
-    // ---- Revenue & expense distinctions --------------------------------
+    // ---- Revenue & expense distinctions (accrual accounting model) ----
+    // invoicedRevenue : non-draft invoices issued in the period (accrual
+    //                   event: service billed).
+    // cashCollected   : invoice payments received + un-invoiced cash revenue
+    //                   recorded in the ledger (cash event).
+    // earnedRevenue   : accrued by delivery — documented Phase-1 basis: a
+    //                   non-draft invoice is earned at issue (delivery
+    //                   tracking arrives in a later phase). Never the max
+    //                   of the two sums.
     const invoicedRevenueCents = invoices
       .filter((i) => i.status !== "draft")
       .reduce((s, i) => s + i.amountCents, 0);
@@ -223,8 +231,8 @@ export const overview = query({
       .filter((row) => row.direction === "in" && !row.linkedInvoiceId)
       .reduce((s, row) => s + row.amount, 0);
 
-    const earned = Math.max(invoicedRevenueCents, cashFromInvoicesCents + otherCashRevenueCents);
-    const revenueYtd = earned;
+    const earnedRevenueCents = invoicedRevenueCents; // documented accrual basis
+    const revenueYtd = earnedRevenueCents;
     const cashCollected = cashFromInvoicesCents + otherCashRevenueCents;
     const opex = operatingExpensesCents(
       ytdLedger.map((row) => ({
@@ -288,7 +296,10 @@ export const overview = query({
       activeRetainerClients,
       runwayMonths: runway,
       invoicedRevenueYtd: invoicedRevenueCents,
-      earnedRevenueYtd: revenueYtd,
+      earnedRevenueYtd: earnedRevenueCents,
+      unearnedRevenueYtd: invoicedRevenueCents - cashFromInvoicesCents > 0
+        ? invoicedRevenueCents - cashFromInvoicesCents
+        : 0, // billed but not yet collected (overlaps receivables)
       salaries,
       openLeadCount: openLeads.length,
       assumptions: {

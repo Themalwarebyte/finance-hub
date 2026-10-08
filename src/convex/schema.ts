@@ -451,6 +451,113 @@ const schema = defineSchema(
         v.literal("consolidated"),
       )),
     }).index("by_user", ["userId"]),
+
+    // ---------------------------------------------------------------
+    // Phase 2 — Investment Management. Personal workspace (household-
+    // scoped), separate from GHub business money. Quantities are fixed-
+    // point micro-units (1 share = 1_000_000); amounts are integer cents.
+    // ---------------------------------------------------------------
+
+    // A tradable/holdable security or asset.
+    securities: defineTable({
+      householdId: v.id("households"),
+      symbol: v.string(), // "SCOM", "SMWF"…
+      name: v.string(),
+      assetClass: v.union(
+        v.literal("equity"),
+        v.literal("etf"),
+        v.literal("money_market_fund"),
+        v.literal("sacco_deposit"),
+        v.literal("sacco_share_capital"),
+        v.literal("treasury_bill"),
+        v.literal("treasury_bond"),
+        v.literal("infrastructure_bond"),
+      ),
+      // Starting positions entered manually; unknown cost bases stay null
+      // until the user supplies them.
+      costBasisCents: v.optional(v.number()), // null = requires user entry
+      brokerageAccountId: v.optional(v.id("accounts")), // cash pool for trades
+      createdAt: v.number(),
+    }).index("by_household", ["householdId"]),
+
+    // Manual price entries with timestamp and source — never live data.
+    securityPrices: defineTable({
+      securityId: v.id("securities"),
+      priceCents: v.number(),
+      source: v.string(), // "manual", broker statement, NSE close…
+      recordedAt: v.number(),
+      createdBy: v.id("users"),
+    }).index("by_security", ["securityId"]),
+
+    // The investment transaction ledger. Distinct from the household
+    // ledger and from the GHub business ledger.
+    investTxns: defineTable({
+      householdId: v.id("households"),
+      securityId: v.id("securities"),
+      kind: v.union(
+        v.literal("purchase"),
+        v.literal("sale"),
+        v.literal("dividend"),
+        v.literal("interest"),
+        v.literal("fee"),
+        v.literal("contribution"),
+        v.literal("withdrawal"),
+        v.literal("split"),
+        v.literal("adjustment"),
+      ),
+      qtyMicro: v.optional(v.number()), // fixed-point; required for unit kinds
+      amountCents: v.number(), // signed cash effect: buys negative, sales/dividends positive
+      feeCents: v.optional(v.number()),
+      cashAccountId: v.optional(v.id("accounts")), // brokerage cash pool
+      realizedGainCents: v.optional(v.number()), // filled on sales
+      note: v.optional(v.string()),
+      date: v.number(),
+      createdBy: v.id("users"),
+      createdAt: v.number(),
+    }).index("by_household", ["householdId"])
+      .index("by_security", ["securityId"]),
+
+    // Allocation cycle templates (A/B/C percentages) and pause flag.
+    investAllocations: defineTable({
+      householdId: v.id("households"),
+      cycle: v.union(v.literal("A"), v.literal("B"), v.literal("C")),
+      securityId: v.id("securities"),
+      pct: v.number(), // 0..100, cycle must total exactly 100
+      active: v.boolean(),
+    }).index("by_household", ["householdId"]),
+
+    // Planner runs: budget, carried-forward cash, computed plan (no trades).
+    investPlans: defineTable({
+      householdId: v.id("households"),
+      monthKey: v.string(), // "2026-10"
+      budgetCents: v.number(),
+      carriedInCents: v.number(),
+      carriedOutCents: v.number(),
+      result: v.optional(v.string()), // JSON snapshot of PlannerResult
+      paused: v.boolean(),
+      createdAt: v.number(),
+    }).index("by_household", ["householdId"]),
+
+    // Audit trail for valuations, manual corrections and transactions.
+    investAudit: defineTable({
+      householdId: v.id("households"),
+      action: v.string(), // "price_update", "adjustment", "txn_created"…
+      detail: v.string(),
+      refId: v.optional(v.string()),
+      createdBy: v.id("users"),
+      createdAt: v.number(),
+    }).index("by_household", ["householdId"]),
+
+    // Multi-roadmap registry (30/33-year plans arrive in later phases;
+    // this phase only defines the two roadmaps' metadata).
+    roadmapDefinitions: defineTable({
+      householdId: v.id("households"),
+      key: v.string(), // "nse_strategy", "ghub_master"
+      title: v.string(),
+      startDate: v.number(),
+      endDate: v.number(),
+      visionTargets: v.optional(v.string()), // JSON; kept separate from actuals
+    }).index("by_household_key", ["householdId", "key"]),
   },
   {
     schemaValidation: false,
