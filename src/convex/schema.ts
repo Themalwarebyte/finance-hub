@@ -2,6 +2,16 @@ import { authTables } from "@convex-dev/auth/server";
 import { defineSchema, defineTable } from "convex/server";
 import { Infer, v } from "convex/values";
 
+// Supported display currencies (initial). Financial records are stored in
+// their original currency; these only control display and conversion.
+export const SUPPORTED_CURRENCIES = ["KES", "USD"] as const;
+
+export type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number];
+
+export const DEFAULT_DISPLAY_CURRENCY: SupportedCurrency = "USD";
+
+export const DEFAULT_HOUSEHOLD_CURRENCY = "KES";
+
 // default user roles. can add / remove based on the project as needed
 export const ROLES = {
   ADMIN: "admin",
@@ -113,7 +123,7 @@ const schema = defineSchema(
     // your partner) share every account, transaction and projection inside it.
     households: defineTable({
       name: v.string(),
-      currency: v.string(),
+      currency: v.string(), // default display currency for the workspace (repurposed; UI can override)
       inviteCode: v.string(),
       createdBy: v.id("users"),
     }).index("by_invite_code", ["inviteCode"]),
@@ -161,6 +171,7 @@ const schema = defineSchema(
       createdBy: v.id("users"),
       createdAt: v.number(),
       // Optional extensions.
+      currency: v.optional(v.string()), // defaults to the account/household currency
       transferAccountId: v.optional(v.id("accounts")), // destination for transfers
       subcategory: v.optional(v.string()),
       merchant: v.optional(v.string()),
@@ -209,6 +220,7 @@ const schema = defineSchema(
       active: v.boolean(),
       createdBy: v.id("users"),
       createdAt: v.number(),
+      currency: v.optional(v.string()), // defaults to the household currency
     }).index("by_household", ["householdId"]),
 
     // Savings goals. Progress derives from transactions tagged with the goal.
@@ -220,6 +232,7 @@ const schema = defineSchema(
       targetDate: v.optional(v.number()),
       linkedAccountId: v.optional(v.id("accounts")), // where savings land
       contributionAmount: v.optional(v.number()), // planned per month
+      currency: v.optional(v.string()), // defaults to the household currency
       archived: v.optional(v.boolean()),
       completedAt: v.optional(v.number()),
       createdBy: v.id("users"),
@@ -238,6 +251,7 @@ const schema = defineSchema(
       monthlyPayment: v.number(), // positive cents
       paymentFrequency: v.optional(frequencyValidator), // default monthly
       nextDueDate: v.optional(v.number()),
+      currency: v.optional(v.string()), // defaults to the household currency
       startDate: v.optional(v.number()),
       expectedPayoffDate: v.optional(v.number()),
       linkedAccountId: v.optional(v.id("accounts")), // the loan/card account
@@ -254,6 +268,7 @@ const schema = defineSchema(
       netWorth: v.number(), // cents
       assets: v.number(), // cents
       liabilities: v.number(), // cents (positive number owed)
+      currency: v.optional(v.string()), // defaults to the household currency
       source: v.optional(v.union(v.literal("auto"), v.literal("manual"))),
       createdAt: v.number(),
     })
@@ -272,11 +287,26 @@ const schema = defineSchema(
     // Money fields remain integer cents.
     // ---------------------------------------------------------------
 
+    // Exchange rates for display-currency conversion. Stored natively in
+    // `fromCurrency -> toCurrency`; never generated on the fly. Users can
+    // add/manage these manually; the app never fabricates a rate.
+    currencyRates: defineTable({
+      fromCurrency: v.string(),
+      toCurrency: v.string(),
+      exchangeRate: v.number(), // 1 USD = X KES (positive, > 0)
+      effectiveDate: v.number(), // ms epoch of the day this rate is valid from
+      source: v.string(), // e.g. "manual", "Central Bank of Kenya", "RBA"
+      createdBy: v.id("users"),
+      createdAt: v.number(),
+    })
+      .index("by_from", ["fromCurrency", "toCurrency", "effectiveDate"])
+      .index("by_to", ["toCurrency", "effectiveDate"]),
+
     // The business entity itself. Created on demand; never shares the
     // household's membership list.
     businesses: defineTable({
       name: v.string(), // "GHub Technology Solutions"
-      currency: v.string(), // "KES"
+      currency: v.string(), // default display currency for this business (KES)
       createdBy: v.id("users"),
       createdAt: v.number(),
     }).index("by_created_by", ["createdBy"]),
@@ -448,7 +478,8 @@ const schema = defineSchema(
       createdAt: v.number(),
     }).index("by_business", ["businessId"]),
 
-    // Tiny per-user preference store for the business view switcher.
+    // Tiny per-user preference stores: business-view switch and display
+    // currency for conversion.
     userSettings: defineTable({
       userId: v.id("users"),
       bizView: v.optional(v.union(
@@ -456,7 +487,19 @@ const schema = defineSchema(
         v.literal("ghub"),
         v.literal("consolidated"),
       )),
+      displayCurrency: v.optional(v.string()), // e.g. "KES" / "USD"
     }).index("by_user", ["userId"]),
+
+    // Persisted export payload (REGEXPEXCLUDED, snapshot of real records).
+    exportPayload: defineTable({
+      householdId: v.id("households"),
+      exportedAt: v.number(),
+      personal: v.optional(v.string()), // JSON
+      business: v.optional(v.string()), // JSON
+      investments: v.optional(v.string()), // JSON
+      roadmap: v.optional(v.string()), // JSON
+      createdAt: v.number(),
+    }).index("by_household_exported_at", ["householdId", "exportedAt"]),
 
     // ---------------------------------------------------------------
     // Phase 2 — Investment Management. Personal workspace (household-

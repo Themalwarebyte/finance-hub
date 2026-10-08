@@ -21,6 +21,8 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
+import { convertCents } from "@/lib/currency";
+import { Globe } from "lucide-react";
 import {
   ArrowRightLeft,
   Briefcase,
@@ -266,6 +268,11 @@ export function AppShell() {
 
   const household = useQuery(api.households.current);
   const loadSample = useMutation(api.sample.load);
+  const displayCurrency = useQuery(api.currency.getDisplayCurrency, {});
+  const countryRate = useQuery(api.currency.getCountry, {
+    code: displayCurrency ?? "",
+  });
+  const rateCentsPerUsd = countryRate?.rateCentsPerUsd ?? null;
 
   const [recordOpen, setRecordOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
@@ -432,6 +439,23 @@ export function AppShell() {
 
             <div className="flex items-center gap-2">
               <div className="hidden sm:block">{workspaceButton}</div>
+              <div className="hidden sm:flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 rounded-full border border-border/70 px-3 py-1.5">
+                  <Globe className="size-3.5 text-muted-foreground" />
+                  <select
+                    value={displayCurrency ?? "USD"}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      void api.currency.setDisplayCurrency({ country: next });
+                    }}
+                    className="bg-transparent text-sm font-medium text-foreground outline-none focus:ring-0"
+                    aria-label="Display currency"
+                  >
+                    <option value="USD">USD (US Dollar)</option>
+                    <option value="KES">KES (Kenyan Shilling)</option>
+                  </select>
+                </div>
+              </div>
               <Button className="gap-2" onClick={() => setRecordOpen(true)}>
                 <ArrowRightLeft className="size-4" />
                 <span className="hidden sm:inline">Record money</span>

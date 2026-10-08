@@ -5,6 +5,7 @@ import { AppShell } from "@/components/finance/AppShell";
 import { VlyToolbar } from "../vly-toolbar-readonly.tsx";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { ConvexReactClient } from "convex/react";
+import ExportPage from "./pages/SettingsExportPage";
 import React, { StrictMode, useEffect, lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router";
@@ -148,11 +149,8 @@ createRoot(document.getElementById("root")!).render(
           <RouteSyncer />
           <Suspense fallback={<RouteLoading />}>
             <Routes>
-              <Route path="/" element={<Landing />} />
-              <Route
-                path="/auth"
-                element={<AuthPage redirectAfterAuth="/dashboard" />}
-              />
+              <Route path="/" element={<Landing />} />      <Route path="/auth" element={<AuthPage redirectAfterAuth="/dashboard" />} />
+      <Route path="/settings/export" element={<RequireAuth><ExportPage /></RequireAuth>} />
               {/* All authenticated pages share the AppShell layout: the sidebar
                   lives at the route level, so no page can render without it. */}
               <Route element={<RequireAuth><AppShell /></RequireAuth>}>
